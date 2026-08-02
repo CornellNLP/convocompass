@@ -1,0 +1,76 @@
+services:
+
+  mysql_db:
+    image: mysql:latest
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      MYSQL_AUTH_PLUGIN: mysql_native_password
+    expose:
+      - 3306
+    volumes:
+      - mysql_db_data:/var/lib/mysql
+
+  init_db:
+    build: ./user_study_database
+    image: convocompass-init-db:latest
+    restart: unless-stopped
+    environment:
+      - MYSQL_HOST=mysql_db
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      - MYSQL_DATABASE=user_study
+    depends_on:
+      - mysql_db
+
+  roberta-service:
+    build: ./roberta-model-service
+    image: convocompass-roberta:latest
+    restart: unless-stopped
+    ports:
+      - 8085:8085
+    volumes:
+      # mount a local checkpoint here, or leave it out and set HF_REPO_ID
+      - ./roberta-model-service/roberta-model-checkpoint:/models/checkpoint
+    environment:
+      - MODEL_PATH=/models/checkpoint
+      - HF_REPO_ID=${HF_REPO_ID:-}
+      - DEVICE=${ROBERTA_DEVICE:-cpu}
+    mem_limit: 8g
+    # uncomment to run on gpu (also set ROBERTA_DEVICE=cuda in .env)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  extension:
+    build: ./reddit-extension-backend
+    image: convocompass-extension:latest
+    restart: unless-stopped
+    ports:
+      - 8083:8083
+    environment:
+      - MODEL_TYPE=${MODEL_TYPE:-roberta}
+      - ROBERTA_SERVICE_URL=http://roberta-service:8085
+      - MODEL_REQUEST_TIMEOUT=${MODEL_REQUEST_TIMEOUT:-10}
+      - MYSQL_HOST=mysql_db
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      - MYSQL_DATABASE=user_study
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT:-convocompass}
+      - PERSPECTIVE_API_KEY=${PERSPECTIVE_API_KEY:?set PERSPECTIVE_API_KEY in .env}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:?set ADMIN_USERNAME in .env}
+      - EXIT_SURVEY_URL=${EXIT_SURVEY_URL:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://www.reddit.com,https://old.reddit.com}
+    depends_on:
+      - roberta-service
+      - mysql_db
+    mem_limit: 20g
+
+volumes:
+  mysql_db_data:

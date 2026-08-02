@@ -1,0 +1,14 @@
+convokit==3.1.0
+Flask==3.1.1
+Flask_Cors==4.0.0
+gevent==23.9.1
+google_api_python_client==2.102.0
+matplotlib==3.10.3
+mysql-connector-python==8.1.0
+nltk==3.8.1
+numpy==2.0.2
+pandas==2.2.3
+praw==7.8.1
+Requests==2.32.3
+scikit-learn==1.6.1
+torch==2.3.0

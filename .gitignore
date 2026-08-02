@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*~
+*.tar
+
+# secrets — never commit
+.env
+**/data/perspective-key.txt
+
+# model weights (see README: mount locally or set HF_REPO_ID)
+roberta-model-service/roberta-model-checkpoint/
+
+# runtime artifacts
+reddit-extension-backend/data/model_cmv.tar
+logs/
+*.log
