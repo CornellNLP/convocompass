@@ -1,0 +1,6 @@
+ConvoWizard: Real-time, opt-in drafting feedback for talk-page discussions. 
+This gadget reads the current discussion context and your draft reply text to show tension-aware suggestions before posting.
+
+'''Privacy notice''': ConvoWizard sends discussion context and draft text to an external Cornell-hosted research backend. Privacy details: [https://en.wikipedia.org/wiki/User:Iamhamidrezaee/ConvoWizard_Privacy_Policy User:Iamhamidrezaee/ConvoWizard_Privacy_Policy].
+
+'''Scope''': Talk namespaces only, view mode only, logged-in users only.

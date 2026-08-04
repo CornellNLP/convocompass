@@ -1,0 +1,12 @@
+{
+  "name": "convowizard-tests",
+  "type": "module",
+  "scripts": {
+    "test": "npx playwright test --config playwright.config.mjs",
+    "test:corpus": "npx playwright test corpus-extraction --config playwright.config.mjs",
+    "test:visual": "npx playwright test green-tint --config playwright.config.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.0"
+  }
+}

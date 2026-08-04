@@ -1,0 +1,6 @@
+== editing ==
+* ConvoWizard[ResourceLoader|dependencies=mediawiki.api,mediawiki.user,mediawiki.util|namespaces=1,3,5,7,9,11,13,15,101,119,829]|ConvoWizard.js|ConvoWizard.css
+
+Notes:
+- Keep as opt-in (do not add `default`).
+- If interface admins prefer broader registration, they can remove `namespaces=...` because runtime guards in script already restrict to talk pages.

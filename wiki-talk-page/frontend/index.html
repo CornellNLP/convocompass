@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConvoWizard - Installation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <canvas id="background-canvas"></canvas>
+    <!-- Toast notification container -->
+    <div id="toast-container"></div>
+
+    <div class="page-wrapper">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">◈</span>
+                <span class="logo-text">ConvoWizard</span>
+            </div>
+            <p class="tagline">AI-powered conversation insights for Wikipedia</p>
+        </header>
+
+        <div class="notice-banner">
+            <span class="notice-badge">TEST ENVIRONMENT</span>
+            <p>This installation targets <strong>test.wikipedia.org</strong> — Wikipedia's sandbox for testing.</p>
+        </div>
+
+        <!-- Progress indicator -->
+        <div class="progress-track">
+            <div class="progress-step active" data-step="1">
+                <span class="progress-dot"></span>
+                <span class="progress-label">Login</span>
+            </div>
+            <div class="progress-line"></div>
+            <div class="progress-step" data-step="2">
+                <span class="progress-dot"></span>
+                <span class="progress-label">Install</span>
+            </div>
+            <div class="progress-line"></div>
+            <div class="progress-step" data-step="3">
+                <span class="progress-dot"></span>
+                <span class="progress-label">Verify</span>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <!-- Phase 1: Login -->
+            <section class="phase" id="phase-login">
+                <div class="phase-header">
+                    <span class="phase-number">1</span>
+                    <div class="phase-title">
+                        <h2>Sign in to Wikipedia Test</h2>
+                        <p>You need an account on the test Wikipedia to install ConvoWizard</p>
+                    </div>
+                </div>
+                <div class="phase-content">
+                    <div class="action-cards">
+                        <a href="https://test.wikipedia.org/w/index.php?title=Special:UserLogin" 
+                           target="_blank" 
+                           class="action-card primary"
+                           onclick="markStepComplete(1)">
+                            <span class="card-icon">→</span>
+                            <div class="card-text">
+                                <strong>Login</strong>
+                                <span>I have an account</span>
+                            </div>
+                        </a>
+                        <a href="https://test.wikipedia.org/w/index.php?title=Special:CreateAccount" 
+                           target="_blank" 
+                           class="action-card"
+                           onclick="markStepComplete(1)">
+                            <span class="card-icon">+</span>
+                            <div class="card-text">
+                                <strong>Create Account</strong>
+                                <span>I'm new here</span>
+                            </div>
+                        </a>
+                    </div>
+                    <p class="phase-note">Already logged in? Continue to the next step.</p>
+                </div>
+            </section>
+
+            <!-- Phase 2: Install -->
+            <section class="phase" id="phase-install">
+                <div class="phase-header">
+                    <span class="phase-number">2</span>
+                    <div class="phase-title">
+                        <h2>Install ConvoWizard</h2>
+                    </div>
+                </div>
+                <div class="phase-content">
+                    <div class="install-instructions">
+                        <ol class="mini-steps">
+                            <li>
+                                <span class="mini-step-num">a</span>
+                                <span class="step-content">
+                                    <span>Copy this code:</span>
+                                    <div class="code-block-inline">
+                                        <code>mw.loader.load('//test.wikipedia.org/w/index.php?title=User:Iamhamidrezaee/ConvoWizard.js&action=raw&ctype=text/javascript');</code>
+                                    </div>
+                                </span>
+                            </li>
+                            <li>
+                                <span class="mini-step-num">b</span>
+                                <span class="step-content">
+                                    <span>Open your Wikipedia settings page:</span>
+                                    <a href="https://test.wikipedia.org/wiki/Special:MyPage/common.js" 
+                                       target="_blank" 
+                                       class="open-settings-btn"
+                                       onclick="markStepComplete(2)">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                            <polyline points="15 3 21 3 21 9"/>
+                                            <line x1="10" y1="14" x2="21" y2="3"/>
+                                        </svg>
+                                        Open Settings Page
+                                    </a>
+                                </span>
+                            </li>
+                            <li>
+                                <span class="mini-step-num">c</span>
+                                <span>If the source exists, click <kbd>Edit source</kbd>. Otherwise, click <kbd>Create source</kbd></span>
+                            </li>
+                            <li>
+                                <span class="mini-step-num">d</span>
+                                <span>Paste the code in the editor using <kbd>Ctrl</kbd>+<kbd>V</kbd> (or <kbd>⌘</kbd>+<kbd>V</kbd> on Mac)</span>
+                            </li>
+                            <li>
+                                <span class="mini-step-num">e</span>
+                                <span>Click <strong><kbd>Publish changes</kbd></strong> at the bottom of the page</span>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Phase 3: Verify -->
+            <section class="phase" id="phase-verify">
+                <div class="phase-header">
+                    <span class="phase-number">3</span>
+                    <div class="phase-title">
+                        <h2>Test It Out</h2>
+                        <p>Make sure ConvoWizard is working properly</p>
+                    </div>
+                </div>
+                <div class="phase-content">
+                    <a href="https://test.wikipedia.org/wiki/User:Iamhamidrezaee/sandbox" 
+                       target="_blank" 
+                       class="test-link"
+                       onclick="markStepComplete(3)">
+                        <span class="test-link-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                <polyline points="15 3 21 3 21 9"/>
+                                <line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                        </span>
+                        Open Test Discussion Page
+                    </a>
+                    
+                    <div class="verify-checklist">
+                        <p>On the test page:</p>
+                        <ul>
+                            <li>Click <strong><kbd>reply</kbd></strong> on any comment</li>
+                            <li>Look for ConvoWizard's conversation analysis panel</li>
+                            <li>Start typing to see real-time feedback</li>
+                        </ul>
+                    </div>
+
+                    <div class="success-message" id="success-message">
+                        <span class="success-icon">✓</span>
+                        <span>You're all set! ConvoWizard is ready to use.</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <aside class="sidebar">
+            <!-- Uninstall Section -->
+            <div class="sidebar-card">
+                <h3>Uninstall</h3>
+                <p>Want to remove ConvoWizard?</p>
+                <button class="uninstall-btn" onclick="handleUninstall()">
+                    Open Settings Page
+                </button>
+                <p class="sidebar-note">Delete the ConvoWizard line and publish changes.</p>
+            </div>
+
+            <!-- Help Section -->
+            <div class="sidebar-card">
+                <h3>Need Help?</h3>
+                <div class="contact-links">
+                    <a href="mailto:hr328@cornell.edu" class="contact-link">
+                        <span>✉</span>
+                        hr328@cornell.edu
+                    </a>
+                    <a href="tel:+16076631415" class="contact-link">
+                        <span>☎</span>
+                        (607) 663-1415
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <footer class="footer">
+            <button class="reset-btn" onclick="resetProgress()">
+                <span class="reset-icon">↺</span> Start Over
+            </button>
+            <p>ConvoWizard · Cornell University · 2025</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

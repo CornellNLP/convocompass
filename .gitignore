@@ -11,6 +11,9 @@ __pycache__/
 roberta-model-service/roberta-model-checkpoint/
 
 # runtime artifacts
-reddit-extension-backend/data/model_cmv.tar
+extension-backend/data/model_cmv.tar
 logs/
 *.log
+
+# node deps for the gadget test suite
+wiki-talk-page/test/node_modules/

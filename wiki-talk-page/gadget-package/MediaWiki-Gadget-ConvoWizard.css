@@ -1,0 +1,25 @@
+/* ConvoWizard gadget styles */
+
+.convowizard-mute-btn {
+  line-height: 1.2;
+}
+
+.convowizard-unmute-indicator {
+  line-height: 1.3;
+}
+
+.craftDisplay,
+.passiveModeDisplay {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.craftDisplay .convowizard-header-text {
+  overflow-wrap: anywhere;
+}
+
+.convowizard-auth-form input:focus {
+  border-color: #0645ad;
+  outline: 2px solid rgba(6, 69, 173, 0.3);
+  outline-offset: -1px;
+}

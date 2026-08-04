@@ -1,0 +1,30 @@
+== ConvoWizard privacy disclosure ==
+
+ConvoWizard is an optional (opt-in) gadget for talk-page drafting feedback. When enabled, it sends limited discussion data to a Cornell-hosted backend for scoring before a reply is posted.
+
+=== Data sent by the gadget ===
+* Username (`wgUserName`).
+* Page URL where the reply is being drafted.
+* Extracted discussion context text from the current thread.
+* Draft reply text while the user is typing.
+* Interaction and token identifiers required by the service.
+
+=== Data retained by the backend ===
+* Action log records (including text payload): retained until manual deletion by maintainers.
+* Token metadata: retained until manual deletion by maintainers.
+* Infrastructure/server logs (for example IP and user-agent, where collected by hosting/proxy): retained per host defaults, currently up to 30 days.
+
+=== Deletion requests ===
+To request deletion of ConvoWizard records, contact: `hr328@cornell.edu`.
+
+Please include:
+* Wikipedia username.
+* Approximate date/time (UTC) of activity.
+* Link(s) to affected talk page(s), if available.
+
+Deletion requests are acknowledged as soon as practical and processed within 30 days.
+
+=== User control ===
+* ConvoWizard is opt-in (not enabled by default).
+* Users can disable it at any time in Preferences.
+* Invalid tokens are automatically cleared by gadget logic.
