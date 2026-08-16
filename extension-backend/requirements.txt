@@ -1,3 +1,6 @@
+# CPU-only torch: the in-process CRAFT RNN doesn't need CUDA, and RoBERTa
+# scoring goes over HTTP to roberta-service. Halves the image size.
+--extra-index-url https://download.pytorch.org/whl/cpu
 convokit==3.1.0
 Flask==3.1.1
 Flask_Cors==4.0.0
@@ -11,4 +14,4 @@ pandas==2.2.3
 praw==7.8.1
 Requests==2.32.3
 scikit-learn==1.6.1
-torch==2.3.0
+torch==2.3.0+cpu

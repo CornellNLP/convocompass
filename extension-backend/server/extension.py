@@ -4,7 +4,7 @@ import time, json, data, re
 from datetime import datetime
 from pprint import pprint
 from convokit.model import Utterance, Corpus, Speaker
-from utils import model_scorer, user_study, perspective
+from utils import model_scorer, user_study, perspective, gemini_client
 import praw
 from server import helpers
 
@@ -85,6 +85,30 @@ def start():
         existing = [{"id": None, "text": c} for c in context]
         reply_id = None
 
+    if data.ASSISTANCE_TYPE == "gemini":
+        # newcomer-assistance mode: no forecaster scoring; the gemini-service
+        # supplies a discussion summary + policy links. Failures yield None and
+        # the gadget keeps its placeholder text.
+        feedback = gemini_client.get_feedback(
+            existing, None, data.GEMINI_SERVICE_URL, data.GEMINI_REQUEST_TIMEOUT
+        ) or {}
+        interaction_id = user_study.log_action(
+            user_study.Action.START,
+            t,
+            token=token,
+            is_passive=False,
+            url=url,
+            reply_to=reply_id,
+        )
+        return helpers.response(
+            "llm_newcomer",
+            interaction_id,
+            llm_summary=feedback.get("summary"),
+            llm_links=feedback.get("links"),
+            username=username,
+            message=user_study.get_message(token),
+        )
+
     if response_type[:5] != "toxic":
         corpus = crafted(existing, None)
         craft_ctx_score = corpus.get_utterance(existing[-1]["id"]).meta["craft_score"]
@@ -151,6 +175,24 @@ def continue_():
     if interaction_id is None:
         print("found interaction_id=None; aborting logging")
         return Response(json.dumps({"status": "error"}))
+
+    if data.ASSISTANCE_TYPE == "gemini":
+        feedback = gemini_client.get_feedback(
+            existing, new, data.GEMINI_SERVICE_URL, data.GEMINI_REQUEST_TIMEOUT
+        ) or {}
+        user_study.log_action(
+            user_study.Action.CONTINUE,
+            t,
+            interaction_id=interaction_id,
+            text=new,
+        )
+        return helpers.response(
+            "llm_newcomer",
+            interaction_id,
+            llm_summary=feedback.get("summary"),
+            llm_links=feedback.get("links"),
+            username=username,
+        )
 
     if response_type[:5] != "toxic":
         corpus = crafted(existing, new)
@@ -225,6 +267,16 @@ def submit():
         if type(submitted_id) == str and "_t1_" in submitted_id
         else None
     )
+
+    if data.ASSISTANCE_TYPE == "gemini":
+        user_study.log_action(
+            user_study.Action.SUBMIT,
+            t,
+            interaction_id=interaction_id,
+            text=new,
+            comment_id=submitted_id,
+        )
+        return Response(json.dumps({"status": "success"}))
 
     corpus = crafted(existing, new)
     toxic_reply_score = perspective.get_tox(request_data["new"])

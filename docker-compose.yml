@@ -27,8 +27,8 @@ services:
     build: ./roberta-model-service
     image: convocompass-roberta:latest
     restart: unless-stopped
-    ports:
-      - 8085:8085
+    expose:
+      - 8085
     volumes:
       # mount a local checkpoint here, or leave it out and set HF_REPO_ID
       - ./roberta-model-service/roberta-model-checkpoint:/models/checkpoint
@@ -51,7 +51,9 @@ services:
     image: convocompass-extension:latest
     restart: unless-stopped
     ports:
-      - 8083:8083
+      # 8087 externally: craft-live's extension owns 8083 on this host and must
+      # not be disturbed while the study deployment is up.
+      - 8087:8083
     environment:
       - MODEL_TYPE=${MODEL_TYPE:-roberta}
       - ROBERTA_SERVICE_URL=http://roberta-service:8085

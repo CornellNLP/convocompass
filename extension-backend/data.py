@@ -18,6 +18,18 @@ ROBERTA_SERVICE_URL = os.environ.get("ROBERTA_SERVICE_URL", "http://localhost:80
 # request timeout in seconds for external model calls
 MODEL_REQUEST_TIMEOUT = float(os.environ.get("MODEL_REQUEST_TIMEOUT", "10"))
 
+# assistance backend selection: "none" (default; forecaster-only behavior) or
+# "gemini" (skip forecaster scoring, serve newcomer-oriented LLM feedback from
+# the gemini-service). independent axis from MODEL_TYPE.
+ASSISTANCE_TYPE = os.environ.get("ASSISTANCE_TYPE", "none").lower()
+
+# gemini feedback service url (used when ASSISTANCE_TYPE="gemini")
+GEMINI_SERVICE_URL = os.environ.get("GEMINI_SERVICE_URL", "http://localhost:8085")
+
+# request timeout in seconds for gemini-service calls; failures fall back to
+# placeholder text in the gadget, so a tight deadline beats a long wait
+GEMINI_REQUEST_TIMEOUT = float(os.environ.get("GEMINI_REQUEST_TIMEOUT", "10"))
+
 ##############################################################
 # constants & data structures needed for application, Do Not Modify
 ##############################################################
