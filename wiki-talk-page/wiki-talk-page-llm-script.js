@@ -9,9 +9,11 @@
  * colored alerts, the panels show:
  *   - Discussion Summary: a plain-language summary of the ongoing discussion
  *   - Suggested Reading: 1-3 Wikipedia policy/guideline links with reasons
- * Both are produced server-side (extension backend -> gemini-service); this
- * script only renders them. Links are built with DOM APIs from server-
- * whitelisted URLs — nothing model-authored is ever inserted as HTML.
+ * both are produced on toolforge (/llm/); this script only renders them.
+ * an optional assistant.yaml pasted in the widget is sent with start/continue
+ * and swaps those two panels for one guidance string (llm_response).
+ * links are built with DOM APIs from server-whitelisted URLs — nothing
+ * model-authored is ever inserted as HTML.
  */
 (async function () {
   'use strict';
@@ -19,16 +21,19 @@
   // Load core util module via ResourceLoader
   await mw.loader.using(['mediawiki.util', 'mediawiki.user', 'mediawiki.api']);
 
-  // /llm/ routes forward to the convocompass demo backend (jacqueline :8087);
-  // the /api/ routes keep serving the live craft study (:8083) untouched.
+  // /llm/ is served on toolforge (gemini lives there). /api/ still proxies
+  // the live craft study to cornell and is not used by this script.
   const SERVER = 'https://convocompass.toolforge.org/llm/';
 
   // ---- UI strings and thresholds ----
   const NAME = 'ConvoCompass';
   const DEBUG = /(?:\?|&)convowizardDebug=1(?:&|$)/.test(location.search);
   const OPTION_KEY = 'userjs-convowizard-token';
+  const YAML_OPTION_KEY = 'userjs-convocompass-assistant-yaml';
+  const MAX_YAML_CHARS = 32768;
   const SUMMARY_PLACEHOLDER = `${NAME} is reading this discussion and will summarize it here.`;
   const GUIDANCE_PLACEHOLDER = `As you write, ${NAME} will suggest Wikipedia pages here that are worth reading for this discussion.`;
+  const ASSISTANT_PLACEHOLDER = `${NAME} will write guidance here from your yaml.`;
   // Only links whose URL passes this prefix check are ever rendered. The server
   // builds URLs from its own whitelist; this is defense in depth.
   const ALLOWED_LINK_PREFIX = 'https://en.wikipedia.org/wiki/Wikipedia:';
@@ -205,10 +210,70 @@
 
   await loadPersistedToken();
 
+  let ASSISTANT_YAML = '';
+  const YAML_STORAGE_KEY = `ConvoCompass:assistantYaml:${USERNAME}`;
+
+  function getYamlFromOptions() {
+    try {
+      if (mw.user && mw.user.options && typeof mw.user.options.get === 'function') {
+        const raw = mw.user.options.get(YAML_OPTION_KEY);
+        if (typeof raw === 'string' && raw.trim()) return raw;
+      }
+    } catch (err) {
+      console.warn(`[${NAME}] failed to read yaml from user options`, err);
+    }
+    return null;
+  }
+
+  async function persistYaml(yaml) {
+    if (!yaml) {
+      localStorage.removeItem(YAML_STORAGE_KEY);
+    } else {
+      localStorage.setItem(YAML_STORAGE_KEY, yaml);
+    }
+    // user options can reject large/multiline values; localstorage is the source of truth
+    if (!(mw.user && mw.user.options && typeof mw.user.options.set === 'function')) {
+      return;
+    }
+    try {
+      mw.user.options.set(YAML_OPTION_KEY, yaml || '');
+      await new mw.Api().saveOption(YAML_OPTION_KEY, yaml || '');
+    } catch (err) {
+      console.warn(`[${NAME}] could not persist yaml to user options`, err);
+    }
+  }
+
+  function loadPersistedYaml() {
+    const fromOptions = getYamlFromOptions();
+    const fromStorage = localStorage.getItem(YAML_STORAGE_KEY);
+    const raw = (fromOptions || fromStorage || '').trim();
+    if (raw && raw.length <= MAX_YAML_CHARS) {
+      ASSISTANT_YAML = raw;
+      if (!fromOptions && fromStorage) {
+        persistYaml(fromStorage);
+      } else if (fromOptions) {
+        localStorage.setItem(YAML_STORAGE_KEY, fromOptions);
+      }
+    }
+  }
+
+  function llmFields() {
+    const fields = {};
+    const yaml = (ASSISTANT_YAML || '').trim();
+    if (yaml) {
+      fields.assistant_yaml = yaml;
+      fields.topic_name = mw.config.get('wgTitle') || '';
+    }
+    return fields;
+  }
+
+  loadPersistedYaml();
+
   console.log(`[${NAME}] === SCRIPT LOADED SUCCESSFULLY ===`);
   console.log(`[${NAME}] Server: ${SERVER}`);
   console.log(`[${NAME}] User: ${USERNAME}`);
   console.log(`[${NAME}] Token: ${TOKEN ? 'present' : 'none (will prompt)'}`);
+  console.log(`[${NAME}] Assistant yaml: ${ASSISTANT_YAML ? 'present' : 'none'}`);
   console.log(`[${NAME}] Page URL: ${location.href}`);
   console.log(`[${NAME}] Installing click and mutation observers...`);
 
@@ -309,6 +374,145 @@
     form.appendChild(errDiv);
     widgetEl.prepend(form);
     input.focus();
+  }
+
+  function yamlButtonLabel() {
+    return ASSISTANT_YAML ? 'change yaml' : 'load yaml';
+  }
+
+  function syncYamlButtons() {
+    document.querySelectorAll('.convowizard-yaml-btn').forEach((btn) => {
+      btn.textContent = yamlButtonLabel();
+    });
+  }
+
+  function showYamlForm(widgetEl) {
+    if (widgetEl.querySelector('.convowizard-yaml-form')) return;
+
+    const form = document.createElement('div');
+    form.className = 'convowizard-yaml-form';
+    form.style.cssText = `
+      margin:8px 0;padding:16px 20px;border-radius:8px;border:2px solid #0645ad;
+      background:linear-gradient(135deg,#f8f9fa 0%,#ffffff 100%);
+      box-shadow:0 2px 8px rgba(0,0,0,.1);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    `;
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:600;font-size:14px;color:#0645ad;margin-bottom:8px;';
+    title.textContent = `${NAME}: assistant yaml`;
+
+    const desc = document.createElement('div');
+    desc.style.cssText = 'font-size:13px;color:#333;margin-bottom:12px;line-height:1.4;';
+    desc.textContent = 'paste an assistant.yaml to change llm behavior for you. leave empty and apply to go back to discussion summary + suggested reading.';
+
+    const textarea = document.createElement('textarea');
+    textarea.rows = 10;
+    textarea.placeholder = 'persona:\n  name: ...';
+    textarea.spellcheck = false;
+    textarea.value = ASSISTANT_YAML || '';
+    textarea.style.cssText = `
+      width:100%;box-sizing:border-box;padding:8px 10px;font-size:12px;border:1px solid #a2a9b1;border-radius:4px;
+      font-family:monospace;outline:none;resize:vertical;min-height:120px;
+    `;
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:8px;';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Apply';
+    btn.style.cssText = `
+      padding:8px 16px;font-size:13px;font-weight:600;border:none;border-radius:4px;
+      background:#0645ad;color:#fff;cursor:pointer;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    `;
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Close';
+    cancel.style.cssText = `
+      padding:8px 16px;font-size:13px;border:1px solid #a2a9b1;border-radius:4px;
+      background:#fff;color:#333;cursor:pointer;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    `;
+
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'font-size:12px;color:#d73027;margin-top:8px;display:none;';
+
+    async function onApply() {
+      const raw = textarea.value.trim();
+      if (raw.length > MAX_YAML_CHARS) {
+        errDiv.textContent = `yaml is too long (max ${MAX_YAML_CHARS} characters).`;
+        errDiv.style.display = 'block';
+        return;
+      }
+      ASSISTANT_YAML = raw;
+      await persistYaml(raw || null);
+      syncYamlButtons();
+      form.remove();
+      const st = widgetState.get(widgetEl);
+      if (!st || !TOKEN) return;
+      const contextUtterances = st.context.split(/\s*\(UTC\)\s*/).filter(text => text.trim().length > 0);
+      const existing = contextUtterances.map((text, index) => ({
+        id: `wiki_${st.interactionId}_${index}`,
+        text: text.trim()
+      }));
+      const draft = (st.inputEl.innerText || st.inputEl.textContent || st.inputEl.value || '');
+      const data = await postJson(draft.trim() ? 'continue' : 'start', {
+        existing,
+        new: draft,
+        reply_id: existing.length > 0 ? existing[existing.length - 1].id : null,
+        url: wikiUrlToPostId(location.href),
+        interaction_id: st.interactionId,
+        token: TOKEN,
+        username: USERNAME,
+        ...llmFields()
+      });
+      if (data && !data.error) {
+        if (data.interaction_id) {
+          widgetState.set(widgetEl, { ...st, interactionId: data.interaction_id });
+        }
+        handleIntervention(widgetEl, st.inputEl, data);
+      }
+    }
+
+    btn.addEventListener('click', onApply);
+    cancel.addEventListener('click', () => form.remove());
+
+    row.appendChild(btn);
+    row.appendChild(cancel);
+    form.appendChild(title);
+    form.appendChild(desc);
+    form.appendChild(textarea);
+    form.appendChild(row);
+    form.appendChild(errDiv);
+    widgetEl.prepend(form);
+    textarea.focus();
+  }
+
+  function createYamlButton(widgetEl) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'convowizard-yaml-btn';
+    btn.style.cssText = `
+      padding: 4px 8px;
+      font-size: 11px;
+      border: 1px solid #a2a9b1;
+      border-radius: 4px;
+      background: #ffffff;
+      color: #54595d;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    btn.textContent = yamlButtonLabel();
+    btn.title = 'load or change assistant yaml';
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showYamlForm(widgetEl);
+    });
+    return btn;
   }
 
   // ---- state + logs ----
@@ -512,7 +716,8 @@
             new: inputText,
             interaction_id: st.interactionId,
             token: TOKEN,
-            username: USERNAME
+            username: USERNAME,
+            ...llmFields()
           });
 
           if (data && !data.error) {
@@ -530,7 +735,8 @@
             reply_id: existing.length > 0 ? existing[existing.length - 1].id : null,
             url: wikiUrlToPostId(location.href),
             token: TOKEN,
-            username: USERNAME
+            username: USERNAME,
+            ...llmFields()
           });
 
           if (data && !data.error && data.interaction_id) {
@@ -673,9 +879,10 @@
       iconSvg.innerHTML = '<path d="M8 0C3.6 0 0 3.6 0 8s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm1 13H7v-2h2v2zm0-3H7V4h2v6z"/>';
       const textSpan = document.createElement('span');
       textSpan.className = 'convowizard-header-text';
-      textSpan.textContent = `${NAME}: Discussion Summary`;
+      textSpan.textContent = ASSISTANT_YAML ? `${NAME}: Guidance` : `${NAME}: Discussion Summary`;
       cheader.appendChild(iconSvg);
       cheader.appendChild(textSpan);
+      cheader.appendChild(createYamlButton(widgetEl));
       if (threadId) {
         const muteBtn = createMuteButton(threadId, widgetId, isMuted);
         cheader.appendChild(muteBtn);
@@ -683,7 +890,7 @@
       const ccontent = document.createElement('div');
       ccontent.id = `${contextId}_p`;
       ccontent.style.cssText = `font-size:13px;line-height:1.4;color:#333;margin:0;`;
-      ccontent.textContent = SUMMARY_PLACEHOLDER;
+      ccontent.textContent = ASSISTANT_YAML ? ASSISTANT_PLACEHOLDER : SUMMARY_PLACEHOLDER;
       contextBox.appendChild(cheader);
       contextBox.appendChild(ccontent);
       if (isMuted) contextBox.style.display = 'none';
@@ -752,6 +959,35 @@
     }
 
     return { replyId, contextId };
+  }
+
+  function updateAssistantPanel(contextId, replyId, response, personaName) {
+    const box = document.getElementById(`${contextId}_d`);
+    const p = document.getElementById(`${contextId}_p`);
+    const h = document.getElementById(`${contextId}_h`);
+    if (!box || !p) return;
+
+    const muteBtn = box.querySelector('.convowizard-mute-btn');
+    if (muteBtn) {
+      const threadId = muteBtn.getAttribute('data-thread-id');
+      if (threadId && isThreadMuted(threadId)) {
+        box.style.display = 'none';
+        return;
+      }
+    }
+    if (box.style.display === 'none') box.style.display = '';
+
+    p.textContent = response || ASSISTANT_PLACEHOLDER;
+    if (h) {
+      const textSpan = h.querySelector('span.convowizard-header-text');
+      if (textSpan) {
+        const label = (personaName && String(personaName).trim()) || NAME;
+        textSpan.textContent = `${label}`;
+      }
+    }
+
+    const replyBox = document.getElementById(`${replyId}_d`);
+    if (replyBox) replyBox.style.display = 'none';
   }
 
   // Renders the server-provided discussion summary. No scores, no thresholds:
@@ -1111,7 +1347,8 @@
       reply_id: existing.length > 0 ? existing[existing.length - 1].id : null,
       url: wikiUrlToPostId(location.href),
       token: TOKEN,
-      username: USERNAME
+      username: USERNAME,
+      ...llmFields()
     });
 
     console.log(`[${NAME}] Received response from /start:`, data);
@@ -1144,7 +1381,8 @@
       }
 
       const widgetId = widgetEl.id;
-      const h = document.getElementById(`reply_${widgetId}_h`);
+      const headerId = ASSISTANT_YAML ? `context_${widgetId}_h` : `reply_${widgetId}_h`;
+      const h = document.getElementById(headerId);
       if (h) {
         // Update the SVG icon
         const existingSvg = h.querySelector('svg:not(.convowizard-mute-btn svg)');
@@ -1163,7 +1401,9 @@
         // Update text span with processing indicator
         const textSpan = h.querySelector('span.convowizard-header-text');
         if (textSpan) {
-          textSpan.textContent = `${NAME}: Suggested Reading (Processing...)`;
+          textSpan.textContent = ASSISTANT_YAML
+            ? `${NAME}: Guidance (Processing...)`
+            : `${NAME}: Suggested Reading (Processing...)`;
         }
       }
       // Recreate existing array from cached context for continue requests
@@ -1178,7 +1418,8 @@
         new: (st.inputEl.innerText || st.inputEl.textContent || st.inputEl.value || ''),
         interaction_id: st.interactionId,
         token: TOKEN,
-        username: USERNAME
+        username: USERNAME,
+        ...llmFields()
       });
 
       // Handle invalid token on continue
@@ -1274,11 +1515,17 @@
     }
 
     if (which.startsWith('llm')) {
-      console.log(`[${NAME}] LLM mode - summary:`, data.llm_summary != null);
-      console.log(`[${NAME}] LLM mode - links:`, (data.llm_links || []).length);
-
-      updateSummaryPanel(contextId, data.llm_summary);
-      updateGuidancePanel(replyId, data.llm_links, inputEl);
+      if (which === 'llm_assistant' || data.llm_response != null) {
+        console.log(`[${NAME}] LLM assistant mode - response:`, data.llm_response != null);
+        updateAssistantPanel(contextId, replyId, data.llm_response, data.llm_persona_name);
+      } else {
+        console.log(`[${NAME}] LLM mode - summary:`, data.llm_summary != null);
+        console.log(`[${NAME}] LLM mode - links:`, (data.llm_links || []).length);
+        const replyBox = document.getElementById(`${replyId}_d`);
+        if (replyBox) replyBox.style.display = '';
+        updateSummaryPanel(contextId, data.llm_summary);
+        updateGuidancePanel(replyId, data.llm_links, inputEl);
+      }
     } else {
       const noteId = `passivenote${interactionId}_d`;
       if (!data.message && !document.getElementById(noteId)) {
