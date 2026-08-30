@@ -19,7 +19,7 @@
   'use strict';
 
   // Load core util module via ResourceLoader
-  await mw.loader.using(['mediawiki.util', 'mediawiki.user', 'mediawiki.api']);
+  await mw.loader.using(['mediawiki.util', 'mediawiki.user', 'mediawiki.api', 'mediawiki.Title']);
 
   // /llm/ is served on toolforge (gemini lives there). /api/ still proxies
   // the live craft study to cornell and is not used by this script.
@@ -31,6 +31,8 @@
   const OPTION_KEY = 'userjs-convowizard-token';
   const YAML_OPTION_KEY = 'userjs-convocompass-assistant-yaml';
   const MAX_YAML_CHARS = 32768;
+  // matches MAX_ARTICLE_CHARS on toolforge; the server clips again regardless
+  const MAX_ARTICLE_CHARS = 16384;
   const SUMMARY_PLACEHOLDER = `${NAME} is reading this discussion and will summarize it here.`;
   const GUIDANCE_PLACEHOLDER = `As you write, ${NAME} will suggest Wikipedia pages here that are worth reading for this discussion.`;
   const ASSISTANT_PLACEHOLDER = `${NAME} will write guidance here from your yaml.`;
@@ -257,17 +259,58 @@
     }
   }
 
+  // article text for the yaml ARTICLE_PAGE block: a plaintext extract of this
+  // talk page's subject page, fetched once per page load and only while a yaml
+  // is active (the non-yaml path never uses it).
+  let ARTICLE_PAGE_TEXT = '';
+  let articlePagePromise = null;
+
+  function ensureArticlePage() {
+    if (!ASSISTANT_YAML || articlePagePromise) return articlePagePromise;
+    articlePagePromise = (async () => {
+      try {
+        const title = new mw.Title(mw.config.get('wgPageName'));
+        const subject = title.getSubjectPage();
+        // non-talk pages are their own subject page; nothing to fetch there
+        if (!subject || subject.getPrefixedText() === title.getPrefixedText()) return;
+        const resp = await new mw.Api().get({
+          action: 'query',
+          prop: 'extracts',
+          explaintext: 1,
+          exsectionformat: 'plain',
+          redirects: 1,
+          titles: subject.getPrefixedText(),
+          formatversion: 2
+        });
+        const page = resp && resp.query && resp.query.pages && resp.query.pages[0];
+        if (page && !page.missing && typeof page.extract === 'string' && page.extract.trim()) {
+          ARTICLE_PAGE_TEXT = page.extract.trim().slice(0, MAX_ARTICLE_CHARS);
+          console.log(`[${NAME}] Article extract loaded for "${subject.getPrefixedText()}" (${ARTICLE_PAGE_TEXT.length} chars)`);
+        } else {
+          console.log(`[${NAME}] No article extract available for "${subject.getPrefixedText()}"`);
+        }
+      } catch (err) {
+        console.warn(`[${NAME}] Failed to fetch article extract`, err);
+      }
+    })();
+    return articlePagePromise;
+  }
+
   function llmFields() {
     const fields = {};
     const yaml = (ASSISTANT_YAML || '').trim();
     if (yaml) {
       fields.assistant_yaml = yaml;
       fields.topic_name = mw.config.get('wgTitle') || '';
+      if (ARTICLE_PAGE_TEXT) {
+        fields.article_page = ARTICLE_PAGE_TEXT;
+      }
     }
     return fields;
   }
 
   loadPersistedYaml();
+  ensureArticlePage();
 
   console.log(`[${NAME}] === SCRIPT LOADED SUCCESSFULLY ===`);
   console.log(`[${NAME}] Server: ${SERVER}`);
@@ -404,7 +447,7 @@
 
     const desc = document.createElement('div');
     desc.style.cssText = 'font-size:13px;color:#333;margin-bottom:12px;line-height:1.4;';
-    desc.textContent = 'paste an assistant.yaml to change llm behavior for you. leave empty and apply to go back to discussion summary + suggested reading.';
+    desc.textContent = 'paste an assistant.yaml (or drag and drop the file here) to change llm behavior for you. leave empty and apply to go back to discussion summary + suggested reading.';
 
     const textarea = document.createElement('textarea');
     textarea.rows = 10;
@@ -440,6 +483,51 @@
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'font-size:12px;color:#d73027;margin-top:8px;display:none;';
 
+    // drag-and-drop a yaml file anywhere on the form; it fills the textarea
+    // (still requires Apply, so the drop can be reviewed and cancelled)
+    async function loadYamlFile(file) {
+      if (!file) return;
+      if (file.size > MAX_YAML_CHARS) {
+        errDiv.textContent = `yaml file is too long (max ${MAX_YAML_CHARS} characters).`;
+        errDiv.style.display = 'block';
+        return;
+      }
+      try {
+        textarea.value = await file.text();
+        errDiv.style.display = 'none';
+        textarea.focus();
+      } catch (err) {
+        console.warn(`[${NAME}] could not read dropped file`, err);
+        errDiv.textContent = 'could not read the dropped file.';
+        errDiv.style.display = 'block';
+      }
+    }
+
+    const textareaBorder = textarea.style.border;
+    function isFileDrag(e) {
+      return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    }
+    form.addEventListener('dragover', (e) => {
+      if (!isFileDrag(e)) return;
+      // preventDefault is what makes the form a valid drop target (and stops
+      // the browser from navigating to the file); stopPropagation keeps the
+      // reply widget's own drop handling out of it
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+      textarea.style.border = '2px dashed #0645ad';
+    });
+    form.addEventListener('dragleave', () => {
+      textarea.style.border = textareaBorder;
+    });
+    form.addEventListener('drop', (e) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      textarea.style.border = textareaBorder;
+      loadYamlFile(e.dataTransfer.files[0]);
+    });
+
     async function onApply() {
       const raw = textarea.value.trim();
       if (raw.length > MAX_YAML_CHARS) {
@@ -449,15 +537,12 @@
       }
       ASSISTANT_YAML = raw;
       await persistYaml(raw || null);
+      await ensureArticlePage();
       syncYamlButtons();
       form.remove();
       const st = widgetState.get(widgetEl);
       if (!st || !TOKEN) return;
-      const contextUtterances = st.context.split(/\s*\(UTC\)\s*/).filter(text => text.trim().length > 0);
-      const existing = contextUtterances.map((text, index) => ({
-        id: `wiki_${st.interactionId}_${index}`,
-        text: text.trim()
-      }));
+      const existing = utterancesToExisting(st);
       const draft = (st.inputEl.innerText || st.inputEl.textContent || st.inputEl.value || '');
       const data = await postJson(draft.trim() ? 'continue' : 'start', {
         existing,
@@ -705,11 +790,7 @@
         // Re-run the continue request to refresh the display
         const inputText = st.inputEl.innerText || st.inputEl.textContent || st.inputEl.value || '';
         if (inputText.trim().length > 0) {
-          const contextUtterances = st.context.split(/\s*\(UTC\)\s*/).filter(text => text.trim().length > 0);
-          const existingForContinue = contextUtterances.map((text, index) => ({
-            id: `wiki_${st.interactionId}_${index}`,
-            text: text.trim()
-          }));
+          const existingForContinue = utterancesToExisting(st);
 
           const data = await postJson('continue', {
             existing: existingForContinue,
@@ -724,11 +805,7 @@
             handleIntervention(widgetEl, st.inputEl, data);
           }
         } else {
-          const contextUtterances = st.context.split(/\s*\(UTC\)\s*/).filter(text => text.trim().length > 0);
-          const existing = contextUtterances.map((text, index) => ({
-            id: `wiki_${st.interactionId}_${index}`,
-            text: text.trim()
-          }));
+          const existing = utterancesToExisting(st);
 
           const data = await postJson('start', {
             existing,
@@ -1077,6 +1154,128 @@
   }
 
 
+  // ===== Section-scoped context via DiscussionTools comment markers =====
+  // DiscussionTools brackets every parsed comment with
+  //   <span data-mw-comment-start id="c-Author-<timestamp>..."></span> ... <span data-mw-comment-end="c-..."></span>
+  // Collecting every marked comment in the enclosing section, in document
+  // order, up to the reply box gives "what the user sees above the box" —
+  // including equal-level siblings and {{outdent}}ed threads that the legacy
+  // ancestor-chain walk (getContextStringFor below, kept as fallback) misses.
+  const MAX_CONTEXT_UTTERANCES = 12;
+
+  function parseAuthorFromCommentId(id) {
+    // "c-Author_name-2026-05-30T17:19:00.000Z[-...]" -> "Author name"
+    try {
+      const m = /^c-(.+?)-\d{4}-\d{2}-\d{2}T/.exec(id || '');
+      return m ? decodeURIComponent(m[1]).replace(/_/g, ' ') : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function extractMarkedCommentText(startMarker) {
+    const id = startMarker.id;
+    let endMarker = null;
+    if (id) {
+      try {
+        endMarker = document.querySelector(`span[data-mw-comment-end="${CSS.escape(id)}"]`);
+      } catch {
+        endMarker = null;
+      }
+    }
+    try {
+      const range = document.createRange();
+      range.setStartAfter(startMarker);
+      if (endMarker) {
+        range.setEndBefore(endMarker);
+      } else {
+        // no end marker found: fall back to the containing block's content
+        const block = startMarker.closest('dd, li, p') || startMarker.parentElement;
+        if (!block) return '';
+        range.setEnd(block, block.childNodes.length);
+      }
+      const div = document.createElement('div');
+      div.appendChild(range.cloneContents());
+      // strip nested reply lists, our own UI, and DT chrome from the excerpt
+      div.querySelectorAll(
+        'dl, ul, ol, .ext-discussiontools-ui-replyWidget, .craftDisplay, .passiveModeDisplay, ' +
+        '.ext-discussiontools-init-replylink-buttons, .convowizard-yaml-form, .convowizard-auth-form, ' +
+        '.convowizard-unmute-indicator, [role="button"], [data-mw-comment-start], [data-mw-comment-end]'
+      ).forEach(n => n.remove());
+      return (div.textContent || '').replace(/\s+/g, ' ').trim();
+    } catch (err) {
+      console.warn(`[${NAME}] Marker range extraction failed`, err);
+      return '';
+    }
+  }
+
+  function findSectionHeading(el) {
+    let node = el;
+    while (node && node !== document.body) {
+      let sib = node.previousElementSibling;
+      while (sib) {
+        if (/^H[1-6]$/.test(sib.tagName) || (sib.classList && sib.classList.contains('mw-heading'))) {
+          return sib;
+        }
+        sib = sib.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  // Returns [{id, speaker, text}] in reading order, or null when the page has
+  // no DiscussionTools markers (caller falls back to the legacy DOM walk).
+  function collectUtterances(widgetEl) {
+    const markers = Array.from(document.querySelectorAll('span[data-mw-comment-start]'));
+    if (!markers.length) return null;
+    // only comments the user sees above the reply box
+    let inScope = markers.filter(
+      m => m.compareDocumentPosition(widgetEl) & Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    // ...and only within the enclosing section
+    const heading = findSectionHeading(widgetEl);
+    if (heading) {
+      inScope = inScope.filter(
+        m => heading.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    }
+    const utterances = [];
+    for (const m of inScope) {
+      const text = extractMarkedCommentText(m);
+      if (!text || text.length < 2) continue;
+      utterances.push({
+        id: m.id || `c-unknown-${utterances.length}`,
+        speaker: parseAuthorFromCommentId(m.id),
+        text
+      });
+    }
+    return utterances.length ? utterances : null;
+  }
+
+  // Single builder for the `existing` array every request sends. Prefers the
+  // marker-based utterances stored in widget state; falls back to splitting
+  // the legacy context string on signature timestamps (tolerating "(UTC-4)"
+  // style user-preference timezones, which the old literal split missed).
+  function utterancesToExisting(st) {
+    const key = (st && st.interactionId) || Date.now();
+    if (st && Array.isArray(st.utterances) && st.utterances.length) {
+      let list = st.utterances;
+      if (list.length > MAX_CONTEXT_UTTERANCES) {
+        list = [list[0]].concat(list.slice(-(MAX_CONTEXT_UTTERANCES - 1)));
+      }
+      return list.map((u, i) => {
+        const item = { id: u.id || `wiki_${key}_${i}`, text: u.text };
+        if (u.speaker) item.speaker = u.speaker;
+        return item;
+      });
+    }
+    return ((st && st.context) || '')
+      .split(/\s*\(UTC[^)]{0,9}\)\s*/)
+      .filter(text => text.trim().length > 0)
+      .map((text, index) => ({ id: `wiki_${key}_${index}`, text: text.trim() }));
+  }
+
   function getContextStringFor(widgetEl) {
     try {
       console.log(`[${NAME}] === Extracting context for widget ===`);
@@ -1325,21 +1524,23 @@
     }
     console.log(`[${NAME}] Input element found:`, inputEl.tagName, inputEl.getAttribute('role') || (inputEl.getAttribute('contenteditable') ? 'contenteditable' : ''));
 
-    const context = getContextStringFor(widgetEl);
-    console.log(`[${NAME}] Context extracted, length: ${context.length} chars`);
-    console.log(`[${NAME}] Context preview:`, context.substring(0, 200));
+    // DiscussionTools markers (real per-comment boundaries + authors).
+    // We fall back to a legacy ancestor-chain DOM walk.
+    const dtUtterances = collectUtterances(widgetEl);
+    let context = '';
+    if (dtUtterances) {
+      console.log(`[${NAME}] Context via DT markers: ${dtUtterances.length} comments in section`);
+    } else {
+      context = getContextStringFor(widgetEl);
+      console.log(`[${NAME}] Context via legacy walk (no DT markers), length: ${context.length} chars`);
+    }
 
-    // Split context on (UTC) timestamps to create separate utterances like Reddit does
-    // This prevents backend caching bug where all Wikipedia convos share id=None
-    const utterances = context.split(/\s*\(UTC\)\s*/).filter(text => text.trim().length > 0);
-    const existing = utterances.map((text, index) => ({
-      id: `wiki_${Date.now()}_${index}`,  // Unique ID prevents cache collision
-      text: text.trim()
-    }));
+    const seedState = { interactionId: Date.now(), inputEl, context, utterances: dtUtterances };
+    const existing = utterancesToExisting(seedState);
 
-    console.log(`[${NAME}] Created ${existing.length} utterances with unique IDs`);
+    console.log(`[${NAME}] Created ${existing.length} utterances`);
     existing.forEach((utt, i) => {
-      console.log(`[${NAME}]   ${i}: ID=${utt.id}, text=${utt.text.substring(0, 60)}...`);
+      console.log(`[${NAME}]   ${i}: ID=${utt.id}${utt.speaker ? ` speaker=${utt.speaker}` : ''}, text=${utt.text.substring(0, 60)}...`);
     });
 
     const data = await postJson('start', {
@@ -1363,7 +1564,7 @@
 
     if (!data || !data.interaction_id) return;
 
-    widgetState.set(widgetEl, { interactionId: data.interaction_id, inputEl, context });
+    widgetState.set(widgetEl, { interactionId: data.interaction_id, inputEl, context, utterances: dtUtterances });
     handleIntervention(widgetEl, inputEl, data);
 
     const sendContinue = throttle(async () => {
@@ -1406,12 +1607,8 @@
             : `${NAME}: Suggested Reading (Processing...)`;
         }
       }
-      // Recreate existing array from cached context for continue requests
-      const contextUtterances = st.context.split(/\s*\(UTC\)\s*/).filter(text => text.trim().length > 0);
-      const existingForContinue = contextUtterances.map((text, index) => ({
-        id: `wiki_${st.interactionId}_${index}`,  // Use interaction_id for consistency
-        text: text.trim()
-      }));
+      // Recreate existing array from cached state for continue requests
+      const existingForContinue = utterancesToExisting(st);
 
       const data2 = await postJson('continue', {
         existing: existingForContinue,
@@ -1447,12 +1644,8 @@
         const st = widgetState.get(widgetEl);
         if (!st) return;
         try {
-          // Recreate existing array from cached context for submit
-          const contextUtterances = st.context.split(/\s*\(UTC\)\s*/).filter(text => text.trim().length > 0);
-          const existingForSubmit = contextUtterances.map((text, index) => ({
-            id: `wiki_${st.interactionId}_${index}`,
-            text: text.trim()
-          }));
+          // Recreate existing array from cached state for submit
+          const existingForSubmit = utterancesToExisting(st);
 
           await postJson('submit', {
             existing: existingForSubmit,
