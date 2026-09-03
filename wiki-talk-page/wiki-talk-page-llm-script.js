@@ -1164,10 +1164,25 @@
   const MAX_CONTEXT_UTTERANCES = 12;
 
   function parseAuthorFromCommentId(id) {
-    // "c-Author_name-2026-05-30T17:19:00.000Z[-...]" -> "Author name"
+    // DiscussionTools ids embed the author before a timestamp, which is either
+    // ISO ("c-Author_name-2026-05-30T17:19:00.000Z-...") or compact
+    // ("c-Author_name-20260530171900-..."), depending on wiki/version.
     try {
-      const m = /^c-(.+?)-\d{4}-\d{2}-\d{2}T/.exec(id || '');
+      const m = /^c-(.+?)-(?:\d{4}-\d{2}-\d{2}T|\d{12,14}(?:[-.]|$))/.exec(id || '');
       return m ? decodeURIComponent(m[1]).replace(/_/g, ' ') : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function parseAuthorFromUserLink(container) {
+    // fallback: the signature is the last User:/User talk: link in the comment
+    try {
+      const links = container.querySelectorAll('a[href*="User:"], a[href*="User_talk:"]');
+      if (!links.length) return null;
+      const href = links[links.length - 1].getAttribute('href') || '';
+      const m = /User(?:_talk)?:([^?&#\/]+)/.exec(href);
+      return m ? decodeURIComponent(m[1]).replace(/_/g, ' ').trim() : null;
     } catch {
       return null;
     }
@@ -1191,7 +1206,7 @@
       } else {
         // no end marker found: fall back to the containing block's content
         const block = startMarker.closest('dd, li, p') || startMarker.parentElement;
-        if (!block) return '';
+        if (!block) return { text: '', sigAuthor: null };
         range.setEnd(block, block.childNodes.length);
       }
       const div = document.createElement('div');
@@ -1202,10 +1217,13 @@
         '.ext-discussiontools-init-replylink-buttons, .convowizard-yaml-form, .convowizard-auth-form, ' +
         '.convowizard-unmute-indicator, [role="button"], [data-mw-comment-start], [data-mw-comment-end]'
       ).forEach(n => n.remove());
-      return (div.textContent || '').replace(/\s+/g, ' ').trim();
+      return {
+        text: (div.textContent || '').replace(/\s+/g, ' ').trim(),
+        sigAuthor: parseAuthorFromUserLink(div)
+      };
     } catch (err) {
       console.warn(`[${NAME}] Marker range extraction failed`, err);
-      return '';
+      return { text: '', sigAuthor: null };
     }
   }
 
@@ -1242,11 +1260,11 @@
     }
     const utterances = [];
     for (const m of inScope) {
-      const text = extractMarkedCommentText(m);
+      const { text, sigAuthor } = extractMarkedCommentText(m);
       if (!text || text.length < 2) continue;
       utterances.push({
         id: m.id || `c-unknown-${utterances.length}`,
-        speaker: parseAuthorFromCommentId(m.id),
+        speaker: parseAuthorFromCommentId(m.id) || sigAuthor,
         text
       });
     }
