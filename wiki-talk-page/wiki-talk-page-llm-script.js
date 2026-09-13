@@ -27,7 +27,7 @@
       .cc-panel__icon{color:var(--color-subtle,#54595d);flex-shrink:0;}
       .cc-btn svg{flex-shrink:0;}
       .cc-panel__title{flex:1;}
-      .cc-panel__body{font-size:13px;color:var(--color-base,#202122);margin:0;}
+      .cc-panel__body{font-size:14px;}
       .cc-link-item{margin:0 0 var(--spacing-50,8px) 0;}
       .cc-link-item:last-child{margin-bottom:0;}
       .cc-link{font-weight:600;color:var(--color-progressive,#36c);text-decoration:none;}
@@ -51,7 +51,7 @@
       .cc-row{display:flex;gap:var(--spacing-50,8px);align-items:center;}
       .cc-error{font-size:12px;color:var(--color-error,#bf3c2c);margin-top:var(--spacing-50,8px);}
 	  .cc-noshrink{flex-shrink:0;}
-	  .cc-card__buttons{display:flex;gap:1em;}
+	  .cc-card__buttons{display:flex;gap:8px;}
 	  .cc-card__buttons--floating{margin-left:auto;}
 	  .cc-card{margin:1em 0;}
       `;
@@ -493,7 +493,7 @@
       title.textContent = `${NAME}: assistant.yaml`;
   
       const desc = document.createElement('div');
-      desc.className = 'cdx-card__text__description';
+      desc.className = 'cdx-card__text__description cc-panel__body';
       desc.textContent = 'Paste an assistant.yaml (or drag and drop the file here) to change the LLM behavior for you. Leave empty and apply to go back to the discussion summary and suggested reading.';
   
       const textarea = document.createElement('textarea');
@@ -943,7 +943,7 @@
 		// Content
         const ccontent = document.createElement('div');
         ccontent.id = `${contextId}_p`;
-        ccontent.className = 'cdx-card__text__description';
+        ccontent.className = 'cdx-card__text__description cc-panel__body';
         ccontent.textContent = ASSISTANT_YAML ? ASSISTANT_PLACEHOLDER : SUMMARY_PLACEHOLDER;
 
 		// Supporters
@@ -1003,7 +1003,7 @@
 		// Content
         const content = document.createElement('div');
         content.id = `${replyId}_p`;
-        content.className = 'cc-panel__body';
+        content.className = 'cdx-card__text__description cc-panel__body';
         content.textContent = GUIDANCE_PLACEHOLDER;
 		
         replySubBox.appendChild(header);
