@@ -1034,39 +1034,44 @@
     }
 
 	async function parseAssistantResponse(response) {
-		try {
-			const nutshellRegex = /\{\{\s*(?:(?:policy|guideline) in a )?nutshell\s*\|\s*([^{}]*)\}\}/i;
-			const responseObj = JSON.parse(response);
-			const payload = responseObj.join('|');
-			console.log(payload);
-			const pageData = await mwApi.get( {
-				action: 'query',
-				prop: 'revisions',
-				titles: payload,
-				rvprop: 'content',
-				rvslots: 'main',
-				formatversion: '2',
-				redirects: '1',
-				format: 'json'
-			});
-			console.log(pageData);
-			var nutshells = {};
+		const output = document.createElement('div');
+		const responseObj = JSON.parse(response);
+		const pageDataPromise = await Promise.allSettled(responseObj.map((title) => mwApi.get( {
+			action: 'parse',
+			page: title,
+			formatversion: '2',
+			redirects: '1',
+			format: 'json'
+		})))
+		const pageData = pageDataPromise.filter(r => r.status === 'fulfilled').map(r => r.value).filter(
+			p => !Object.prototype.hasOwnProperty.call(p, 'error') &&
+                  Object.prototype.hasOwnProperty.call(p, 'parse') &&
+                  Object.prototype.hasOwnProperty.call(p.parse, 'text')
+		);
+		for (var p of pageData) {
+			var policyDoc = new DOMParser().parseFromString(p.parse.text, 'text/html');
+			var nutshellNode = policyDoc.querySelector('#pnutshell td + td');
 			var curNutshell;
-			for (var p of pageData.query.pages) {
-				if (!Object.prototype.hasOwnProperty.call(p, 'missing')) {
-					curNutshell = p.revisions[0].slots.main.content.match(nutshellRegex);
-					if (curNutshell) {
-						nutshells[p.title] = curNutshell[1];
-					} else {
-						nutshells[p.title] = "No description found!";
-					}
-				}
+			if (nutshellNode) {
+				nutshellNode.removeChild(nutshellNode.firstChild); // We remove the bold "This page in a nutshell" thingie
+				curNutshell = nutshellNode.innerHTML.trim();
+			} else {
+				curNutshell = "No description found!";
 			}
-			console.log(nutshells)
-			return nutshells;
-		} catch (SyntaxError) {
-			return ASSISTANT_PLACEHOLDER;
+			var policyBlock = document.createElement('div');
+			var policyLink = document.createElement('a');
+			policyLink.textContent = p.parse.title.replace(/^Wikipedia:/, '');
+			policyLink.href = 'https://' + mw.config.get('wgServerName') + mw.config.get('wgArticlePath').replace('$1', mw.util.rawurlencode(p.parse.title));
+			policyLink.rel = 'mw:WikiLink';
+			policyLink.style.fontWeight = 'bold';
+			var policyText = document.createElement('span');
+			policyText.innerHTML = curNutshell; // Should not be vulnerable to injections as we're just recovering MediaWiki-parsed HTML from another page
+			policyBlock.appendChild(policyLink);
+			policyBlock.appendChild(document.createTextNode(' – '));
+			policyBlock.appendChild(policyText);
+			output.appendChild(policyBlock);
 		}
+		return output;
 	}
   
     function updateAssistantPanel(contextId, replyId, response, personaName) {
@@ -1086,19 +1091,12 @@
       if (box.style.display === 'none') box.style.display = '';
   
       parseAssistantResponse(response).then((response) => {
-		p.textContent = '';
-		for (var policy in response) {
-			var policyBlock = document.createElement('div');
-			var policyLink = document.createElement('a');
-			policyLink.textContent = policy.replace(/^Wikipedia:/, '');
-			policyLink.href = 'https://' + mw.config.get('wgServerName') + mw.config.get('wgArticlePath').replace('$1', mw.util.rawurlencode(policy));
-			policyLink.rel = 'mw:WikiLink';
-			policyLink.style.fontWeight = 'bold';
-			var policyText = document.createTextNode(' – ' + response[policy]);
-			policyBlock.appendChild(policyLink);
-			policyBlock.appendChild(policyText);
-			p.appendChild(policyBlock);
-		}
+        p.textContent = '';
+		p.appendChild(response);
+      },
+      (error) => {
+        console.error(`Error while parsing assistant response: ${error.message}`);
+		p.textContent = ASSISTANT_PLACEHOLDER;
       });
 	
       if (h) {
