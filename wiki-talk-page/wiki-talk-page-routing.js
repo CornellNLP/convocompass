@@ -1048,9 +1048,14 @@
                   Object.prototype.hasOwnProperty.call(p, 'parse') &&
                   Object.prototype.hasOwnProperty.call(p.parse, 'text')
 		);
+		var policies = [];
 		for (var p of pageData) {
+			if (policies.includes(p.parse.title)) {
+				continue;
+			}
+			policies.push(p.parse.title);
 			var policyDoc = new DOMParser().parseFromString(p.parse.text, 'text/html');
-			var nutshellNode = policyDoc.querySelector('#pnutshell td + td');
+			var nutshellNode = policyDoc.querySelector('.ombox.nutshell .mbox-text');
 			var curNutshell;
 			if (nutshellNode) {
 				nutshellNode.removeChild(nutshellNode.firstChild); // We remove the bold "This page in a nutshell" thingie
@@ -1069,6 +1074,9 @@
 			policyBlock.appendChild(policyLink);
 			policyBlock.appendChild(document.createTextNode(' – '));
 			policyBlock.appendChild(policyText);
+			if (output.hasChildNodes()) {
+				policyBlock.style.marginTop = '6px';
+			}
 			output.appendChild(policyBlock);
 		}
 		return output;
