@@ -22,7 +22,7 @@ export GEMINI_MODEL=gemini-3.5-flash
 python run_llm.py
 ```
 
-Currently, the 
+Currently, our system only uses the Gemini API for its requests.
 
 In order to have your llm request approved by the backend, we also keep track of valid participant tokens to ensure security. Tokens come from the study database, or from `LLM_DEMO_TOKEN` / `LLM_DEMO_TOKENS` for testing (format documented at the top of `server/llm_backend.py`).
 
