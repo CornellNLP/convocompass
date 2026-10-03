@@ -1,0 +1,54 @@
+persona:
+  id: afd-json-assistant
+  name: Context and policies
+  avatar: 🤖
+  pronouns: null
+  min_call_interval_ms: 1e+24
+model:
+  apiType: GEMINI
+  modelName: gemini-3-flash-preview
+generation:
+  temperature: 0.7
+  reasoning_level: 'off'
+  include_reasoning: false
+include_scaffolding_in_prompt: true
+num_retries: 2
+context: current
+structured_output:
+  enabled: true
+  append_to_prompt: false
+  message_field: response
+  schema:
+    response:
+      type: STRING
+      description: Your guidance for the participant.
+prompt:
+  - id: 0
+    type: TEXT
+    text: >-
+      You are a private assistant helping a newcomer in a deletion discussion on
+      the following page:
+  - id: 1
+    type: ARTICLE_PAGE
+  - id: 2
+    type: TEXT
+    text: >-
+      Based on the conversation so far, help them understand the Articles for
+      Deletion process and the policies and guidelines mentioned (either as
+      capitalized acronyms like WP:N, as links, or implicitly) in the
+      conversation. For that purpose, you will want to output a JSON object
+      containing a list of all the policies and guidelines mentioned explicitly
+      or implicitly, formatted as ["Wikipedia:Notability", ...]. Please only
+      output the JSON object, nothing else.
+
+
+      Here is the conversation context:
+  - id: 3
+    type: CONTEXT
+should_respond_context: current
+should_respond_prompt:
+  - id: 0
+    type: TEXT
+    text: 'Intervene if the following page is an "Articles for deletion" discussion:'
+  - type: ARTICLE_PAGE
+    id: 1
