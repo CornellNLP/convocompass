@@ -1,0 +1,17 @@
+{% extends "shared/base.html" %}
+{% block content %}
+<div class="container" style="padding-top:10px; width:100%">
+  <div class="row" style="width: 100%">
+    <p>You are not signed in.</p>
+  </div>
+    <div class="row" style="width: 100%">
+      <form action="{{ url_for('password.login') }}" method="post">
+	<label for='pin'>Enter the access pin:</label>
+	<input type="input" name="pin">
+	<input type="hidden" name="return_url" value="{{ return_url }}">
+	<br>
+	<button type="submit" class="btn btn-secondary">Submit</button>
+      </form>
+    </div>
+</div>
+{% endblock %}

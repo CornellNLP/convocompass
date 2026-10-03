@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>CRAFT Demo: Wikipedia</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="{{ url_for('static',filename='startbootstrap-bare-gh-pages/vendor/bootstrap/css/bootstrap.min.css') }}"
+    rel="stylesheet">
+  <link href="{{ url_for('static',filename='mystyle/style.css') }}" rel="stylesheet">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <!-- credit to https://stackoverflow.com/questions/17147821/how-to-make-a-whole-row-in-a-table-clickable-as-a-link for solution -->
+  <script type="text/javascript">
+    jQuery(document).ready(function ($) {
+      $(".clickable-row").click(function () {
+        window.location = $(this).data("href");
+      });
+    });
+  </script>
+
+  <div style="width:100%">
+    <div class="row" style="background-color:#a8050e;">
+      <div class="container">
+        <a class="navbar-brand" style="color:white" href="/wiki">
+          Home
+        </a>
+        <span class="navbar-brand" style="float:right">
+          Page Loaded: {{ format_time(now) }}
+        </span>
+      </div>
+
+    </div>
+    <div class="row justify-content-center" style="background-color:#f6f6f6">
+      <h2 class="display-4">CRAFT on Wikipedia Talk Pages</h2>
+      <div class="container">
+	{% include 'shared/private_message.html' %}
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Page Content -->
+  {% block content %}{% endblock %}
+
+  <script src="{{ url_for('static',filename='startbootstrap-bare-gh-pages/vendor/jquery/jquery.slim.min.js') }}"></script>
+  <script src="{{ url_for('static',filename='startbootstrap-bare-gh-pages/vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,35 @@
+<table class="table table-striped table-hover">
+  <tr>
+    <th scope="col">Time</th>
+    <th scope="col" style="width:10%">Author</th>
+    {% if not hide_scores %}
+    <th scope="col">Craft Score</th>
+    {% endif %}
+    <th scope="col" style="width:40%">Text</th>
+  </tr>
+  {% for comment in convo %}
+  <tr class="clickable-row" data-href={{comment.last_revision}} style="cursor: pointer">
+    <td>{{ format_time(comment['timestamp']) }}</td>
+    <th>{{ comment['author'] }}</th>
+    {% if not hide_scores %}
+    <td style="background: {{ score_to_color(comment['score'], threshold=craft_thresh) }}">
+      {{ comment['score'] | round(3) }}
+    </td>
+    {% endif %}
+    <td>
+      {% for p in comment['text'] %}
+      <p style="word-break:break-word;">{{ p }} </p>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+  {% if final_score is not none and not hide_scores%}
+  <tr style="border-top: 3px solid black;">
+    <th>Final Prediction:</th>
+    <td style="background: {{ score_to_color(final_score, threshold=craft_thresh) }}"> </td>
+    <td colspan="4" style="background: {{ score_to_color(final_score, threshold=craft_thresh) }}" >
+      {{ final_score | round(3) }}
+    </td>
+  </tr>
+  {% endif %}
+</table>

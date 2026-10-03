@@ -1,0 +1,26 @@
+<table class="table table-striped table-hover">
+  <h4>Top {{ [num_results,ranks|length] | min }} Conversations Sorted by {{ sort_names[sirtby] }}:</h4>
+  <tr>
+    <th scope="col">Rank</th>
+    <th scope="col">CRAFT Score</th>
+    <th scope="col">Score Change</th>
+    <th scope="col">Conversation Name</th>
+  </tr>
+  {% for rank in ranks %}
+  {% if base == 'wiki/mockup_base.html' %}
+  <tr class="clickable-row" data-href="{{ url_for('wiki_mockup_routes.convo', id=rank['id'], topic=rank['topic']) }}" style="cursor: pointer">
+  {% else %}
+  <tr class="clickable-row" data-href="{{ url_for('wiki_routes.convo', id=rank['id'], topic=rank['topic']) }}" style="cursor: pointer">
+    {% endif %}
+    <th scope="row">{{ loop.index }}</th>
+    <td style="background: {{ score_to_color(rank['score'], threshold=craft_thresh) }}">
+      {{ rank['score'] | round(3) }}
+    </td>
+    <td>
+      {{ make_change_arrow(rank) | safe}}
+    </td>
+    <td>{{ rank['convo_name'] }}</td>
+
+  </tr>
+  {% endfor %}
+</table>

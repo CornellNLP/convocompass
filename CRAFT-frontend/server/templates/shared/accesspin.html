@@ -1,0 +1,21 @@
+{% extends "shared/base.html" %}
+{% block content %}
+<div class="container" style="padding-top:10px; width:100%">
+  <div class="row" style="width: 100%">
+    <p>The current access pin is <b>{{ current }}</b>. Enter the master password to reset the access pin.</p>
+  </div>
+    <div class="row" style="width: 100%">
+    <form action="{{ url_for('password.accesspin') }}" method="post">
+      <label for='pin'>Enter the master password:</label>
+      <input type="input" name="master">
+      <br>
+      <button type="submit" class="btn btn-secondary">Reset the access pin.</button>
+    </form>
+    </div>
+    <div class="row" style="width: 100%">
+    <p>Note: resetting the pin will revoke access to the site for anyone using the old pin.</p>
+  </div>
+
+  </div>
+</div>
+{% endblock %}

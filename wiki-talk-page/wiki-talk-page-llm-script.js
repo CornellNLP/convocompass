@@ -1038,7 +1038,7 @@
     return { replyId, contextId };
   }
 
-  function updateAssistantPanel(contextId, replyId, response, personaName) {
+  function updateAssistantPanel(contextId, replyId, response, personaName, quiet) {
     const box = document.getElementById(`${contextId}_d`);
     const p = document.getElementById(`${contextId}_p`);
     const h = document.getElementById(`${contextId}_h`);
@@ -1054,7 +1054,8 @@
     }
     if (box.style.display === 'none') box.style.display = '';
 
-    p.textContent = response || ASSISTANT_PLACEHOLDER;
+    // quiet round: gate said no, so clear prior guidance instead of the placeholder
+    p.textContent = quiet ? '' : (response || ASSISTANT_PLACEHOLDER);
     if (h) {
       const textSpan = h.querySelector('span.convowizard-header-text');
       if (textSpan) {
@@ -1728,7 +1729,7 @@
     if (which.startsWith('llm')) {
       if (which === 'llm_assistant' || data.llm_response != null) {
         console.log(`[${NAME}] LLM assistant mode - response:`, data.llm_response != null);
-        updateAssistantPanel(contextId, replyId, data.llm_response, data.llm_persona_name);
+        updateAssistantPanel(contextId, replyId, data.llm_response, data.llm_persona_name, data.should_respond === false);
       } else {
         console.log(`[${NAME}] LLM mode - summary:`, data.llm_summary != null);
         console.log(`[${NAME}] LLM mode - links:`, (data.llm_links || []).length);

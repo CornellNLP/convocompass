@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>CRAFT Demo</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="{{ url_for('static',filename='startbootstrap-bare-gh-pages/vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static',filename='mystyle/style.css') }}" rel="stylesheet">
+
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <div style="width:100%">
+    <div class="row" style="background-color:#a8050e;">
+      <div class="container">
+	<a class="navbar-brand" style="color:white" href="/reddit">
+	  Home
+	</a>
+	<span style="color:white" class="navbar-brand">&#9679;</span>
+	<a class="navbar-brand" style="color:white"  href="{{ url_for('reddit_routes.general_feedback') }}">
+	  Feedback
+	</a>
+
+	<span class="navbar-brand" style="float:right">
+	  Page Loaded: {{ format_time(now) }}
+	</span>		
+      </div>
+      
+    </div>
+    <div class="row justify-content-center" style="background-color:#fc471e">
+      <h2 class="display-4">CRAFT on <a class="text-dark" href="http://reddit.com/r/changemyview" target="_blank">reddit.com/r/changemyview</a></h2>
+      <div class="container">
+	  {% include 'shared/private_message.html' %}
+      </div>
+    </div>
+  </div>
+  
+  <!-- Page Content -->
+  {% block content %}{% endblock %}
+
+  <script src="{{ url_for('static',filename='startbootstrap-bare-gh-pages/vendor/jquery/jquery.slim.min.js') }}"></script>
+  <script src="{{ url_for('static',filename='startbootstrap-bare-gh-pages/vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+
+  <script src="{{ url_for('static',filename='jquery-3.5.1.min.js') }}"></script>
+  <!-- credit to https://stackoverflow.com/questions/17147821/how-to-make-a-whole-row-in-a-table-clickable-as-a-link for solution -->
+  <script type="text/javascript">
+    jQuery(document).ready(function($) {
+	$(".clickable-row").click(function() {
+	    window.location = $(this).data("href");
+	});
+    });
+
+    function comment_feedback(form){
+	var url = "{{ url_for('reddit_routes.comment_feedback') }}";
+	var data = $(form).serialize();
+	console.log(data);
+	console.log(url);
+	$.ajax({
+	    type: 'GET',
+	    url: url,
+	    data: data,
+	    success: function(r) {
+		console.log(r);//display message back to user here
+	    }
+	});
+	return false;
+    }
+  </script>
+
+
+  
+</body>
+
+</html>

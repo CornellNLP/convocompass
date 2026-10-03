@@ -1,0 +1,39 @@
+{% extends "reddit/base.html" %}
+{% block content %}
+<div class="container" style="padding-top:10px; width:100%">
+  <h3>Feedback</h3>
+  <p>This website is an experiment into how machine learning can be used to help moderators do their jobs. To evaluate this experiment, we are asking you, the moderators, for feedback on your experience using the CRAFT moderation tool.</p>
+  <form action="{{ url_for('reddit_routes.submit_feedback') }}" method="post">
+    <div class="form-group row">
+      <label for="name" class="col-sm-2 col-form-label">Name:</label>
+      <div class="col-sm-4">
+	<input type="text" class="form-control" id="name" name="name">
+      </div>
+    </div>
+    <div class="form-group row">
+      <label for="username" class="col-sm-2 col-form-label">Reddit Username:</label>
+      <div class="col-sm-4">
+	<input type="text" class="form-control" id="username" name="username">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="likes" class="col-form-label">What did you like about the CRAFT moderation tool?</label>
+      <textarea type="text" class="form-control" id="likes" name="likes"> </textarea>
+    </div>
+    <div class="form-group">
+      <label for="dislikese" class="col-form-label">What did you dislike about the CRAFT moderation tool?</label>
+      <textarea type="text" class="form-control" id="dislikes" name="dislikes"> </textarea>
+    </div>
+    <div class="form-group">
+      <label for="workflow" class="col-form-label">(How) would the CRAFT moderation tool fit into your current moderation workflow?</label>
+      <textarea type="text" class="form-control" id="workflow" name="workflow"> </textarea>
+    </div>
+    <div class="form-group">
+      <label for="general" class="col-form-label">General comments:</label>
+      <textarea type="text" class="form-control" id="general" name="general"> </textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+  </form>
+  <p>Thank you for your feedback, and for your time!</p>
+</div>
+{% endblock %}

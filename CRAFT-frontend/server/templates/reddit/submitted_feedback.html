@@ -1,0 +1,12 @@
+{% extends "reddit/base.html" %}
+
+{% block head %}
+<meta http-equiv = "refresh" content = "2; url = {{ url_for('reddit_routes.home') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top:10px; width:100%">
+  <h3>Thanks for you feedback!</h3>
+  <p>Redirecting to the home page...</p>
+</div>
+{% endblock %}

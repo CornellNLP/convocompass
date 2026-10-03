@@ -1,0 +1,67 @@
+.loader {
+  border: 5px solid #f3f3f3; /* Light grey */
+  border-top: 5px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.craftDisplay {
+    border-radius: 25px;
+    border: 5px solid blue;
+    padding: 10px;
+    margin: 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    transition: width 0.15s ease, height 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.craft-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.craft-header h4 {
+    margin: 0;
+    display: inline-block;
+}
+
+.craft-box-body {
+    overflow-y: auto;
+    max-height: 100%;
+    min-height: 0;
+    word-break: break-word;
+    white-space: pre-wrap;
+    line-height: 1.4;
+}
+
+.craft-change-yaml {
+    cursor: pointer;
+    border: 1px solid #1a73e8;
+    background: #eef4ff;
+    color: #0b57d0;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.passiveModeDisplay {
+  padding: 5px;
+  margin: 10px;
+}

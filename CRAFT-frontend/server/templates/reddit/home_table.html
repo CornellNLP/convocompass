@@ -1,0 +1,59 @@
+<table class="table table-striped table-hover">
+  <h4>Top {{ [k,ranks|length] | min }} Conversations Sorted by {{ sort_names[sortby] }}:</h4>
+  {% if this_time != -1 and not hide_future %}
+  <tr>
+    <th colspan="5" scope="col">At {{ format_time(this_time) }}</th>
+    <th colspan="3" scope="col">Since {{ format_time(this_time) }}</th>
+  </tr>
+  {% endif %}
+  <tr>
+    <th scope="col">Rank</th>
+    <th scope="col">CRAFT Score</th>
+    <th scope="col">Score Change</th>
+    <th scope="col">Number of Comments</th>
+    <th scope="col">Conversation Name</th>
+    {% if this_time != -1 and not hide_future %}
+    <th scope="col">Number of New Comments</th>
+    <th scope="col">Removals</th>
+    <th scope="col">Latest Activity</th>
+    {% endif %}
+  </tr>
+  {% for rank in ranks %}
+  <tr class="clickable-row"
+      {% if not hide_future %}
+      data-href="{{ url_for('reddit_routes.convo', id=rank['id'], t=this_time) }}"
+      {% else %}
+      data-href="{{ url_for('reddit_mockup_routes.convo', id=rank['id'], t=this_time) }}"
+      {% endif %}
+      style="cursor: pointer">
+    <th scope="row">{{ loop.index  }}</th>
+    <td style="background: {{ score_to_color(rank['score'], threshold=craft_thresh) }}" >      
+      {{ rank['score'] | round(3) }}
+    </td>
+    <td>
+      {{ make_change_arrow(rank) | safe}}
+    </td>
+    <td>{{ rank['n_comments'] }}</td>
+    <td>{{ rank['convo_name'] }}</td>
+    {% if this_time != -1 and not hide_future %}
+    <td>{{ rank['n_new_comments'] }}</td>
+    <td
+      {% if rank['removals'] | length > 0 %}
+      style="background: red"
+      {% endif %}
+      >
+      <ul>
+	{% for removal in rank['removals'] %}
+	<li><a href="{{ url_for('reddit_routes.convo', id=removal['id'], t=this_time) }}" style="color:black;">{{ convo_name_to_thread_num(removal['convo_name'])}}</a>
+	</li>
+	{% endfor %}
+      </ul>
+    </td>
+    <td style="background: {{ latest_activity_to_color(rank['latest_activity']) }}">
+      {{ format_time(rank['latest_activity']) }}
+    </td>
+
+    {% endif %}
+  </tr>
+  {% endfor %}
+</table>

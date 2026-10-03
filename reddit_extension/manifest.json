@@ -1,0 +1,50 @@
+{
+    "name": "ConvoWizard (Research Study Ver.)",
+    "version": "0.0.0.7",
+    "description": "ConvoWizard (Research Study Ver.) provides feedback to promote healthier conversations",
+    "manifest_version": 3,
+    "permissions": [
+        "declarativeContent",
+        "storage"
+    ],
+    "host_permissions": [
+        "https://craft.infosci.cornell.edu/*"
+    ],
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": true
+    },
+    "action": {
+        "default_icon": {
+            "16": "images/convokit_16.png",
+            "32": "images/convokit_32.png",
+            "48": "images/convokit_48.png",
+            "128": "images/convokit_128.png"
+        }
+    },
+    "icons": {
+        "16": "images/convokit_16.png",
+        "32": "images/convokit_32.png",
+        "48": "images/convokit_48.png",
+        "128": "images/convokit_128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.reddit.com/r/changemyview*",
+                "*://*.reddit.com/r/KiwiPolitics*",
+                "*://*.reddit.com/r/worldnews*",
+                "*://*.reddit.com/r/politics*",
+                "*://*.reddit.com/r/CivilPolitics*",
+                "*://*.reddit.com/user/CornellCRAFT*"
+            ],
+            "css": [
+                "styles.css"
+            ],
+            "js": [
+                "jquery.js",
+                "intervention.js"
+            ]
+        }
+    ]
+}

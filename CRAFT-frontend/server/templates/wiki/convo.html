@@ -1,0 +1,86 @@
+{% extends base if base else "wiki/base.html" %}
+
+{% block head %}
+{% if convo | length == 0 %}
+{% if base == "wiki/mockup_base.html" %}
+<meta http-equiv = "refresh" content = "1; url = {{ url_for('wiki_mockup_routes.home') }}" />
+{% else %}
+<meta http-equiv = "refresh" content = "1; url = {{ url_for('wiki_routes.home') }}" />
+{% endif %}
+{% endif %}
+{% endblock %}
+
+
+{% block content %}
+<div class="container" style="padding-top:10px; width:100%">
+  <div class="row">
+    <h3>Conversation: "{{convo_name}}"</h3>
+    {% if permalink %}<a href={{permalink}}>Link to discussion</a>
+    {% endif %}
+  </div>
+  {% if not hide_scores %}
+  <div class="row">
+    <form class="form-inline">
+      <label for="scores">Where to display CRAFT scores:</label>
+      <div class="col">
+        <select class="form-control" id="exampleFormControlSelect2" name="update_score_pos" value="1">
+          <option value="2" {% if score_pos==2 %} selected="selected" {% endif %}>Next to context</option>
+          <option value="1" {% if score_pos==1 %} selected="selected" {% endif %}>Interstitially</option>
+          <option value="0" {% if score_pos==0 %} selected="selected" {% endif %}>Next to prediction</option>
+
+        </select>
+      </div>
+      <input type="hidden" name="id" value="{{ utt_id }}">
+      <input type="hidden" name="topic" value="{{ convo_topic }}">
+      <div class="col">
+        <button type="submit" class="btn btn-primary float-right" action="#" method="get">Update</button>
+      </div>
+    </form>
+  </div>
+  <div class="panel-group row">
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h4 class="panel-title">
+          <a data-toggle="collapse" href="#collapse1" style="font-size:12pt">How to interpret score display options:</a>
+        </h4>
+      </div>
+      <div id="collapse1" class="panel-collapse collapse">
+        <ul class="list-group">
+          Based on a conversation, CRAFT predicts if the next comment will be toxic. This is how to interpret the
+          meaning of the display options:
+          <li class="list-group-item">"Next to context" &rArr; A high score means there is high chance of the next
+            comment being toxic, based on everthing up to and including the current comment.</li>
+          <li class="list-group-item">"Interstitially" &rArr; A high score means there is a high chance of the next
+            comment being toxic, based on everything before the score.</li>
+          <li class="list-group-item">"Next to prediction" &rArr; A high score means there is a high chance of this
+            comment being toxic, based on everything before this comment.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="panel-group row">
+    <p>Scores colored using a threshold of <b>{{ craft_thresh | round(2) }}</b>. </p>
+  </div>
+  <br>
+  {% endif %}
+  <div class="row">
+    {% if score_pos == 1 %}
+
+    {% include 'wiki/convo_table_inter.html' %}
+
+    {% else %}
+
+    {% include 'wiki/convo_table_inline.html' %}
+
+    {% endif %}
+  </div>
+
+  {% if hide_scores %}
+  <b>Next</b>: <a href="{{ url_for('wiki_mockup_routes.convo', id=utt_id, topic=convo_topic) }}" style="stretched-link">View this conversation with CRAFT scores.</a>
+  {% elif hide_endings %}
+  <b>Next</b>: <a href="{{ url_for('wiki_mockup_routes.home') }}" style="stretched-link">Go back to the home page for the interview.</a>
+  {% endif %}
+  <br><br>  
+</div>
+
+{% endblock %}

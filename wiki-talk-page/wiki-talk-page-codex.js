@@ -1,19 +1,11 @@
 //<nowiki>
 /**
- * Filename: wiki-talk-page-llm-script.js
+ * Filename: wiki-talk-page-codex.js
  * ConvoCompass LLM – Newcomer-oriented talk-page assistance (Wikipedia userscript)
  *
- * Fork of the live User:Laerdon/ConvoWizard.js (fetched 2026-08-12). Same widget
- * detection, corpus extraction, token auth, mute handling, panel DOM, and
- * Toolforge transport — but instead of CRAFT tension scores and threshold-
- * colored alerts, the panels show:
- *   - Discussion Summary: a plain-language summary of the ongoing discussion
- *   - Suggested Reading: 1-3 Wikipedia policy/guideline links with reasons
- * both are produced on toolforge (/llm/); this script only renders them.
- * an optional assistant.yaml pasted in the widget is sent with start/continue
- * and swaps those two panels for one guidance string (llm_response).
- * links are built with DOM APIs from server-whitelisted URLs — nothing
- * model-authored is ever inserted as HTML.
+ * Codex-styled ConvoCompass. Renders the server's plain-text llm_response as
+ * guidance; a JSON array of policy page titles is still accepted and shown as
+ * nutshells (from the ConvoWizardRouting fork), but JSON is never required.
  */
 (async function () {
     'use strict';
@@ -27,7 +19,7 @@
       .cc-panel__icon{color:var(--color-subtle,#54595d);flex-shrink:0;}
       .cc-btn svg{flex-shrink:0;}
       .cc-panel__title{flex:1;}
-      .cc-panel__body{font-size:13px;color:var(--color-base,#202122);margin:0;}
+      .cc-panel__body{font-size:14px;}
       .cc-link-item{margin:0 0 var(--spacing-50,8px) 0;}
       .cc-link-item:last-child{margin-bottom:0;}
       .cc-link{font-weight:600;color:var(--color-progressive,#36c);text-decoration:none;}
@@ -47,9 +39,13 @@
       .cc-form__desc{font-size:13px;color:var(--color-subtle,#54595d);margin-bottom:var(--spacing-75,12px);line-height:1.5;}
       .cc-input{flex:1;padding:6px 8px;font-size:13px;font-family:monospace;border:1px solid var(--border-color-base,#a2a9b1);border-radius:var(--border-radius-base,2px);background-color:var(--background-color-base,#fff);color:var(--color-base,#202122);outline:none;box-sizing:border-box;}
       .cc-input:focus{border-color:var(--border-color-progressive,#36c);box-shadow:inset 0 0 0 1px var(--border-color-progressive,#36c);}
-      .cc-textarea{width:100%;min-height:120px;resize:vertical;}
+      .cc-textarea{width:100%;min-height:120px;resize:vertical;margin-top:0.5em;}
       .cc-row{display:flex;gap:var(--spacing-50,8px);align-items:center;}
       .cc-error{font-size:12px;color:var(--color-error,#bf3c2c);margin-top:var(--spacing-50,8px);}
+	  .cc-noshrink{flex-shrink:0;}
+	  .cc-card__buttons{display:flex;gap:8px;}
+	  .cc-card__buttons--floating{margin-left:auto;}
+	  .cc-card{margin:1em 0;}
       `;
       const el = document.createElement('style');
       el.id = 'convocompass-codex-styles';
@@ -59,7 +55,16 @@
   
     // Load core util module via ResourceLoader
     await mw.loader.using(['mediawiki.util', 'mediawiki.user', 'mediawiki.api', 'mediawiki.Title']);
-  
+
+	const mwApi = new mw.Api();
+
+	const codexList = await mwApi.get( {
+		action: 'query',
+		list: 'codexicons',
+		names: 'cdxIconCode|cdxIconRobot|cdxIconVolumeOff|cdxIconVolumeUp'
+	} );
+	const codexicons = codexList.query.codexicons;
+	
     // /llm/ is served on toolforge (gemini lives there). /api/ still proxies
     // the live craft study to cornell and is not used by this script.
     const SERVER = 'https://convocompass.toolforge.org/llm/';
@@ -121,6 +126,17 @@
         }
       };
     }
+
+	function cdxToSvg(icon, color, className) {
+		const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        iconSvg.setAttribute('width', '20');
+        iconSvg.setAttribute('height', '20');
+        iconSvg.setAttribute('viewBox', '0 0 20 20');
+        iconSvg.setAttribute('fill', color ? color : 'currentColor');
+        iconSvg.setAttribute('class', ((className || '') + ' cc-noshrink').trim());
+        iconSvg.innerHTML = icon;
+		return iconSvg;
+	}
   
     // Rewrite Wikipedia URL so the reddit-style backend can extract a post_id.
     // Backend does: url.split("comments/")[1][:6]
@@ -388,7 +404,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = 'Authorize';
-      btn.className = 'cc-btn cc-btn--progressive';
+      btn.className = 'cdx-button cdx-button--weight-primary cdx-button--action-progressive';
   
       const errDiv = document.createElement('div');
       errDiv.className = 'cc-error';
@@ -444,13 +460,14 @@
       input.focus();
     }
   
-    function yamlButtonLabel() {
-      return ASSISTANT_YAML ? 'change yaml' : 'load yaml';
+    function yamlButtonLabel() { // Switch back for full labels, can be implemented as an option
+      return ''; // '<span>' + ASSISTANT_YAML ? 'Change YAML' : 'Load YAML' + '</span>';
     }
   
     function syncYamlButtons() {
       document.querySelectorAll('.convowizard-yaml-btn').forEach((btn) => {
         btn.textContent = yamlButtonLabel();
+		btn.prepend(cdxToSvg(codexicons.cdxIconCode, 'var(--color-progressive, #36c)'));
       });
     }
   
@@ -458,15 +475,20 @@
       if (widgetEl.querySelector('.convowizard-yaml-form')) return;
   
       const form = document.createElement('div');
-      form.className = 'convowizard-yaml-form cc-form';
+      form.className = 'convowizard-yaml-form cc-card cdx-card';
+
+      const iconSvg = cdxToSvg(codexicons.cdxIconCode, 'var(--color-subtle, #54595d)', 'cdx-card__icon');
+  
+      const subForm = document.createElement('div');
+      subForm.className = 'convowizard-yaml-form cdx-card__text';
   
       const title = document.createElement('div');
-      title.className = 'cc-form__title';
-      title.textContent = `${NAME}: assistant yaml`;
+      title.className = 'cdx-card__text__title';
+      title.textContent = `${NAME}: assistant.yaml`;
   
       const desc = document.createElement('div');
-      desc.className = 'cc-form__desc';
-      desc.textContent = 'paste an assistant.yaml (or drag and drop the file here) to change llm behavior for you. leave empty and apply to go back to discussion summary + suggested reading.';
+      desc.className = 'cdx-card__text__description cc-panel__body';
+      desc.textContent = 'Paste an assistant.yaml (or drag and drop the file here) to change the LLM behavior for you. Leave empty and apply to go back to the discussion summary and suggested reading.';
   
       const textarea = document.createElement('textarea');
       textarea.rows = 10;
@@ -476,18 +498,18 @@
       textarea.className = 'cc-input cc-textarea';
   
       const row = document.createElement('div');
-      row.className = 'cc-row';
+      row.className = 'cdx-card__text__supporting-text cc-card__buttons';
       row.style.marginTop = '8px';
   
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = 'Apply';
-      btn.className = 'cc-btn cc-btn--progressive';
+      btn.className = 'cdx-button cdx-button--weight-primary cdx-button--action-progressive';
   
       const cancel = document.createElement('button');
       cancel.type = 'button';
       cancel.textContent = 'Close';
-      cancel.className = 'cc-btn';
+      cancel.className = 'cdx-button cdx-button--weight-quiet cdx-button--action-destructive';
   
       const errDiv = document.createElement('div');
       errDiv.className = 'cc-error';
@@ -577,11 +599,13 @@
   
       row.appendChild(btn);
       row.appendChild(cancel);
-      form.appendChild(title);
-      form.appendChild(desc);
-      form.appendChild(textarea);
-      form.appendChild(row);
-      form.appendChild(errDiv);
+      subForm.appendChild(title);
+      subForm.appendChild(desc);
+      subForm.appendChild(textarea);
+      subForm.appendChild(row);
+      subForm.appendChild(errDiv);
+      form.appendChild(iconSvg);
+      form.appendChild(subForm);
       widgetEl.prepend(form);
       textarea.focus();
     }
@@ -589,9 +613,11 @@
     function createYamlButton(widgetEl) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'convowizard-yaml-btn cc-btn cc-btn--quiet';
+      btn.className = 'convowizard-yaml-btn cdx-button cdx-button--weight-quiet cdx-button--action-progressive cdx-button--icon-only';
       btn.textContent = yamlButtonLabel();
-      btn.title = 'load or change assistant yaml';
+      btn.title = 'Load or change assistant.yaml';
+      btn.ariaLabel = 'Load YAML';
+      btn.prepend(cdxToSvg(codexicons.cdxIconCode, 'var(--color-progressive, #36c)'));
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -721,27 +747,10 @@
      * Creates an unmute indicator button that appears when a thread is muted
      * Allows users to restore ConvoWizard for a muted thread
      */
-    // ===== shared inline icons (static markup only — never carries user data) =====
-    // grey robot: the conventional marker for machine-generated content; leaves
-    // color free for future certainty chips etc.
-    const ICON_ROBOT =
-      '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">' +
-      '<path fill-rule="evenodd" d="M8 0a1 1 0 0 1 .5 1.87V3.5H12A2 2 0 0 1 14 5.5v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h3.5V1.87A1 1 0 0 1 8 0ZM5.75 6.75a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4.5 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM5.5 14h5v1.5h-5V14Z"/>' +
-      '</svg>';
-    const ICON_VOLUME_ON =
-      '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">' +
-      '<path d="M8 2.5 4.7 5.5H2.5a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h2.2L8 13.5V2.5Z"/>' +
-      '<path d="M10.3 5.2a.75.75 0 0 1 1.06 0 4 4 0 0 1 0 5.66.75.75 0 1 1-1.06-1.06 2.5 2.5 0 0 0 0-3.54.75.75 0 0 1 0-1.06Z"/>' +
-      '</svg>';
-    const ICON_VOLUME_OFF =
-      '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">' +
-      '<path d="M8 2.5 4.7 5.5H2.5a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h2.2L8 13.5V2.5Z"/>' +
-      '<path d="m10.2 6.2 1.3 1.3 1.3-1.3 1.06 1.06L12.56 8.5l1.3 1.3-1.06 1.06-1.3-1.3-1.3 1.3-1.06-1.06 1.3-1.3-1.3-1.3L10.2 6.2Z"/>' +
-      '</svg>';
 
-    function setMuteButtonLabel(btn, isMuted) {
-      btn.innerHTML = (isMuted ? ICON_VOLUME_ON : ICON_VOLUME_OFF) +
-        '<span>' + (isMuted ? 'Unmute thread' : 'Mute thread') + '</span>';
+    function setMuteButtonLabel(btn, isMuted) { // Switch back for full labels, can be implemented as an option
+      btn.innerHTML = ''; // '<span>' + (isMuted ? 'Unmute thread' : 'Mute thread') + '</span>';
+      btn.prepend(cdxToSvg(isMuted ? codexicons.cdxIconVolumeUp.ltr : codexicons.cdxIconVolumeOff.ltr, isMuted ? 'var(--color-progressive, #36c)' : 'var(--color-neutral, #404244)'));
     }
 
     function ensureUnmuteIndicator(widgetEl, threadId, widgetId) {
@@ -750,9 +759,10 @@
       const indicator = document.createElement('button');
       indicator.type = 'button';
       indicator.id = `convowizard-unmute-${widgetId}`;
-      indicator.className = 'convowizard-unmute-indicator cc-btn cc-btn--quiet';
+      indicator.className = 'convowizard-unmute-indicator cdx-button cdx-button--weight-quiet cdx-button--action-progressive';
       indicator.title = `${NAME} is muted for this thread`;
-      indicator.innerHTML = ICON_VOLUME_ON + `<span>Unmute ${NAME} for this thread</span>`;
+      indicator.innerHTML = `<span>Unmute ${NAME} for this thread</span>`;
+      indicator.prepend(cdxToSvg(codexicons.cdxIconVolumeUp.ltr, 'var(--color-progressive, #36c)'));
   
       indicator.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -823,7 +833,8 @@
     function createMuteButton(threadId, widgetId, isMuted) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'convowizard-mute-btn cc-btn cc-btn--quiet' + (isMuted ? ' cc-btn--muted' : '');
+      btn.className = 'convowizard-mute-btn cdx-button cdx-button--weight-quiet cdx-button--icon-only' + (isMuted ? ' cc-btn--muted' : ''); // Remove cdx-button--icon-only if using full names
+      btn.ariaLabel = isMuted ? 'Unmute' : 'Mute';
       btn.setAttribute('data-thread-id', threadId);
       btn.setAttribute('data-widget-id', widgetId);
       btn.style.marginLeft = 'auto';
@@ -905,33 +916,46 @@
       if (!document.getElementById(`${contextId}_d`)) {
         const contextBox = document.createElement('div');
         contextBox.id = `${contextId}_d`;
-        contextBox.className = 'craftDisplay cc-panel';
+        contextBox.className = 'craftDisplay cc-card cdx-card';
+        const contextSubBox = document.createElement('div');
+        contextSubBox.id = `${contextId}_sd`;
+        contextSubBox.className = 'craftDisplay cdx-card__text';
+
+		// Icon
+        const iconSvg = cdxToSvg(codexicons.cdxIconRobot, 'var(--color-subtle, #54595d)', 'cdx-card__icon');
+
+		// Header
         const cheader = document.createElement('div');
         cheader.id = `${contextId}_h`;
-        cheader.className = 'cc-panel__header';
-        const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        iconSvg.setAttribute('width', '16');
-        iconSvg.setAttribute('height', '16');
-        iconSvg.setAttribute('viewBox', '0 0 16 16');
-        iconSvg.setAttribute('fill', 'currentColor');
-        iconSvg.setAttribute('class', 'cc-panel__icon');
-        iconSvg.innerHTML = '<path fill-rule="evenodd" d="M8 0a1 1 0 0 1 .5 1.87V3.5H12A2 2 0 0 1 14 5.5v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h3.5V1.87A1 1 0 0 1 8 0ZM5.75 6.75a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4.5 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM5.5 14h5v1.5h-5V14Z"/>';
+        cheader.className = 'cdx-card__text__title';
+		
         const textSpan = document.createElement('span');
-        textSpan.className = 'convowizard-header-text cc-panel__title';
+        textSpan.className = 'convowizard-header-text';
         textSpan.textContent = ASSISTANT_YAML ? 'Guidance' : 'Discussion Summary';
-        cheader.appendChild(iconSvg);
         cheader.appendChild(textSpan);
-        cheader.appendChild(createYamlButton(widgetEl));
-        if (threadId) {
-          const muteBtn = createMuteButton(threadId, widgetId, isMuted);
-          cheader.appendChild(muteBtn);
-        }
+
+		// Content
         const ccontent = document.createElement('div');
         ccontent.id = `${contextId}_p`;
-        ccontent.className = 'cc-panel__body';
+        ccontent.className = 'cdx-card__text__description cc-panel__body';
         ccontent.textContent = ASSISTANT_YAML ? ASSISTANT_PLACEHOLDER : SUMMARY_PLACEHOLDER;
-        contextBox.appendChild(cheader);
-        contextBox.appendChild(ccontent);
+
+		// Supporters
+        const csupporting = document.createElement('div');
+        csupporting.id = `${contextId}_st`;
+        csupporting.className = 'cc-card__buttons cc-card__buttons--floating';
+        csupporting.appendChild(createYamlButton(widgetEl));
+        if (threadId) {
+          const muteBtn = createMuteButton(threadId, widgetId, isMuted);
+          csupporting.appendChild(muteBtn);
+        }
+
+        contextSubBox.appendChild(cheader);
+        contextSubBox.appendChild(ccontent);
+        contextBox.appendChild(iconSvg);
+        contextBox.appendChild(contextSubBox);
+        contextBox.appendChild(csupporting);
+
         if (isMuted) contextBox.style.display = 'none';
         widgetEl.prepend(contextBox);
       } else if (threadId) {
@@ -952,32 +976,45 @@
       if (!document.getElementById(`${replyId}_d`)) {
         const replyBox = document.createElement('div');
         replyBox.id = `${replyId}_d`;
-        replyBox.className = 'craftDisplay cc-panel';
+        replyBox.className = 'craftDisplay cc-card cdx-card';
+        const replySubBox = document.createElement('div');
+        replySubBox.id = `${replyId}_sd`;
+        replySubBox.className = 'craftDisplay cdx-card__text';
+
+		// Icon
+        const iconSvg = cdxToSvg(codexicons.cdxIconRobot, 'var(--color-subtle, #54595d)', 'cdx-card__icon');
+
+		// Header
         const header = document.createElement('div');
         header.id = `${replyId}_h`;
-        header.className = 'cc-panel__header';
-        const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        iconSvg.setAttribute('width', '16');
-        iconSvg.setAttribute('height', '16');
-        iconSvg.setAttribute('viewBox', '0 0 16 16');
-        iconSvg.setAttribute('fill', 'currentColor');
-        iconSvg.setAttribute('class', 'cc-panel__icon');
-        iconSvg.innerHTML = '<path fill-rule="evenodd" d="M8 0a1 1 0 0 1 .5 1.87V3.5H12A2 2 0 0 1 14 5.5v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h3.5V1.87A1 1 0 0 1 8 0ZM5.75 6.75a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4.5 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM5.5 14h5v1.5h-5V14Z"/>';
+        header.className = 'cdx-card__text__title';
+		
         const textSpan = document.createElement('span');
         textSpan.className = 'convowizard-header-text cc-panel__title';
-        textSpan.textContent = 'Suggested Reading';
-        header.appendChild(iconSvg);
+        textSpan.textContent = 'Suggested reading';
         header.appendChild(textSpan);
-        if (threadId) {
-          const muteBtn = createMuteButton(threadId, widgetId, isMuted);
-          header.appendChild(muteBtn);
-        }
+
+		// Content
         const content = document.createElement('div');
         content.id = `${replyId}_p`;
-        content.className = 'cc-panel__body';
+        content.className = 'cdx-card__text__description cc-panel__body';
         content.textContent = GUIDANCE_PLACEHOLDER;
-        replyBox.appendChild(header);
-        replyBox.appendChild(content);
+		
+        replySubBox.appendChild(header);
+        replySubBox.appendChild(content);
+        replyBox.appendChild(iconSvg);
+        replyBox.appendChild(replySubBox);
+
+		// Supporters
+        if (threadId) {
+			const csupporting = document.createElement('div');
+			csupporting.id = `${replyId}_st`;
+			csupporting.className = 'cdx-card__text__supporting-buttons';
+			const muteBtn = createMuteButton(threadId, widgetId, isMuted);
+			csupporting.appendChild(muteBtn);
+			replyBox.appendChild(csupporting);
+        }
+		
         if (isMuted) replyBox.style.display = 'none';
         const preview = widgetEl.querySelector('.ext-discussiontools-ui-replyWidget-preview')
           || document.querySelector('.ext-discussiontools-ui-replyWidget-preview');
@@ -995,8 +1032,129 @@
   
       return { replyId, contextId };
     }
+
+	async function renderPolicyNutshells(titles) {
+		const output = document.createElement('div');
+		const responseObj = titles;
+		const pageDataPromise = await Promise.allSettled(responseObj.map((title) => mwApi.get( {
+			action: 'parse',
+			page: title,
+			formatversion: '2',
+			redirects: '1',
+			format: 'json'
+		})))
+		const pageData = pageDataPromise.filter(r => r.status === 'fulfilled').map(r => r.value).filter(
+			p => !Object.prototype.hasOwnProperty.call(p, 'error') &&
+                  Object.prototype.hasOwnProperty.call(p, 'parse') &&
+                  Object.prototype.hasOwnProperty.call(p.parse, 'text')
+		);
+		var policies = [];
+		for (var p of pageData) {
+			if (policies.includes(p.parse.title)) {
+				continue;
+			}
+			policies.push(p.parse.title);
+			var policyDoc = new DOMParser().parseFromString(p.parse.text, 'text/html');
+			var nutshellNode = policyDoc.querySelector('.ombox.nutshell .mbox-text');
+			var curNutshell;
+			if (nutshellNode) {
+				nutshellNode.removeChild(nutshellNode.firstChild); // We remove the bold "This page in a nutshell" thingie
+				curNutshell = nutshellNode.innerHTML.trim();
+			} else {
+				curNutshell = "No description found!";
+			}
+			var policyBlock = document.createElement('div');
+			var policyLink = document.createElement('a');
+			policyLink.textContent = p.parse.title.replace(/^Wikipedia:/, '');
+			policyLink.href = 'https://' + mw.config.get('wgServerName') + mw.config.get('wgArticlePath').replace('$1', mw.util.rawurlencode(p.parse.title));
+			policyLink.rel = 'mw:WikiLink';
+			policyLink.style.fontWeight = 'bold';
+			var policyText = document.createElement('span');
+			policyText.innerHTML = curNutshell; // Should not be vulnerable to injections as we're just recovering MediaWiki-parsed HTML from another page
+			policyBlock.appendChild(policyLink);
+			policyBlock.appendChild(document.createTextNode(' – '));
+			policyBlock.appendChild(policyText);
+			if (output.hasChildNodes()) {
+				policyBlock.style.marginTop = '6px';
+			}
+			output.appendChild(policyBlock);
+		}
+		return output;
+	}
   
-    function updateAssistantPanel(contextId, replyId, response, personaName, quiet) {
+
+	// Safe markdown-lite renderer for plain-text guidance: paragraphs, "1." and
+	// "-" lists, **bold**. Built with DOM APIs only (no innerHTML).
+	function appendInline(parent, text) {
+		text.split(/(\*\*[^*]+\*\*)/).forEach((seg) => {
+			if (!seg) return;
+			if (/^\*\*[^*]+\*\*$/.test(seg)) {
+				const strong = document.createElement('strong');
+				strong.textContent = seg.slice(2, -2);
+				parent.appendChild(strong);
+			} else {
+				parent.appendChild(document.createTextNode(seg));
+			}
+		});
+	}
+
+	function renderPlainGuidance(text) {
+		const output = document.createElement('div');
+		let list = null;
+		let listTag = null;
+		let para = null;
+		const flush = () => { list = null; listTag = null; para = null; };
+		String(text).replace(/\r\n/g, '\n').split('\n').forEach((raw) => {
+			const line = raw.trim();
+			if (!line) { flush(); return; }
+			const num = /^\d+[.)]\s+(.*)$/.exec(line);
+			const bullet = /^[-*•]\s+(.*)$/.exec(line);
+			if (num || bullet) {
+				const tag = num ? 'ol' : 'ul';
+				if (!list || listTag !== tag) {
+					list = document.createElement(tag);
+					list.style.margin = '4px 0 4px 20px';
+					listTag = tag;
+					para = null;
+					output.appendChild(list);
+				}
+				const li = document.createElement('li');
+				appendInline(li, (num || bullet)[1]);
+				list.appendChild(li);
+			} else {
+				list = null; listTag = null;
+				if (!para) {
+					para = document.createElement('p');
+					para.style.margin = '0 0 6px 0';
+					output.appendChild(para);
+				} else {
+					para.appendChild(document.createElement('br'));
+				}
+				appendInline(para, line);
+			}
+		});
+		return output;
+	}
+
+	// The server sends llm_response as plain text. If a yaml instead asks the
+	// model for a JSON array of policy page titles, keep the nutshell rendering;
+	// anything else (including a {"response": "..."} object) is shown as text.
+	async function parseAssistantResponse(response) {
+		if (response == null || String(response).trim() === '') {
+			return document.createTextNode(ASSISTANT_PLACEHOLDER);
+		}
+		let parsed;
+		try { parsed = JSON.parse(response); } catch { parsed = undefined; }
+		if (Array.isArray(parsed) && parsed.length && parsed.every((t) => typeof t === 'string')) {
+			return renderPolicyNutshells(parsed);
+		}
+		if (parsed && typeof parsed === 'object' && typeof parsed.response === 'string') {
+			return renderPlainGuidance(parsed.response);
+		}
+		return renderPlainGuidance(response);
+	}
+  
+    function updateAssistantPanel(contextId, replyId, response, personaName) {
       const box = document.getElementById(`${contextId}_d`);
       const p = document.getElementById(`${contextId}_p`);
       const h = document.getElementById(`${contextId}_h`);
@@ -1012,8 +1170,15 @@
       }
       if (box.style.display === 'none') box.style.display = '';
   
-      // quiet round: gate said no, so clear prior guidance instead of the placeholder
-      p.textContent = quiet ? '' : (response || ASSISTANT_PLACEHOLDER);
+      parseAssistantResponse(response).then((response) => {
+        p.textContent = '';
+		p.appendChild(response);
+      },
+      (error) => {
+        console.error(`Error while parsing assistant response: ${error.message}`);
+		p.textContent = ASSISTANT_PLACEHOLDER;
+      });
+	
       if (h) {
         const textSpan = h.querySelector('span.convowizard-header-text');
         if (textSpan) {
@@ -1688,7 +1853,7 @@
       if (which.startsWith('llm')) {
         if (which === 'llm_assistant' || data.llm_response != null) {
           console.log(`[${NAME}] LLM assistant mode - response:`, data.llm_response != null);
-          updateAssistantPanel(contextId, replyId, data.llm_response, data.llm_persona_name, data.should_respond === false);
+          updateAssistantPanel(contextId, replyId, data.llm_response, data.llm_persona_name);
         } else {
           console.log(`[${NAME}] LLM mode - summary:`, data.llm_summary != null);
           console.log(`[${NAME}] LLM mode - links:`, (data.llm_links || []).length);
