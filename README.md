@@ -1,16 +1,18 @@
 # ConvoCompass
 
-ConvoCompass is a tool which allows users to deploy conversational assistants directly into communication platforms on which they use, such as Reddit or Wikipedia.
+ConvoCompass is a tool created by the [TrAuSt Moonshot team](https://traust.infosci.cornell.edu/) which allows users to deploy conversational assistants directly into communication platforms they use, such as Reddit or Wikipedia.
 
 ## Repository layout
 
 - `wiki-talk-page/`: Wikipedia userscript
 - `wiki-talk-page/yaml/`: Example `assistant.yaml` files
+- `yaml-backend/`: Includes the LLM backend: `assistant.yaml` parsing (`server/assistant_yaml.py`) and the Gemini calls (`server/llm_backend.py`, started by `run_llm.py`).
+- `reddit_extension/`: Chrome extension for Reddit.
+
+In addition, we document some legacy code which provides support specifically for forecasting, or predicting conversational outcomes using specialized models.
 - `extension-backend/`: Legacy code, for forecasting: Flask API (`:8083`) the userscripts call for forecasting scores, participant tokens, and logging
 - `roberta-model-service/`: Legacy code, for forecasting: Serves the fine-tuned RoBERTa forecaster over HTTP
 - `user_study_database/`: Legacy code, for forecasting: MySQL for keeping track of tokens.
-- `CRAFT-frontend/`: Includes the LLM backend: `assistant.yaml` parsing (`server/assistant_yaml.py`) and the Gemini calls (`server/llm_backend.py`, started by `run_llm.py`).
-- `reddit_extension/`: Chrome extension for Reddit.
 
 ## Running the LLM backend
 
