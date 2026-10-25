@@ -111,20 +111,20 @@
     }
   
     // ---------- helpers ----------
-    function throttle(fn, waitMs) {
-      let last = 0, timer = 0, pendingArgs = null;
-      return (...args) => {
-        const now = Date.now();
-        const remaining = waitMs - (now - last);
-        if (remaining <= 0) {
-          last = now;
-          fn(...args);
-        } else {
-          pendingArgs = args;
-          clearTimeout(timer);
-          timer = setTimeout(() => { last = Date.now(); fn(...pendingArgs); }, remaining);
-        }
-      };
+    // ---- send pacing: wait for a pause in typing (shorter after a sentence ends), keep one request in
+    // flight, and stay under the server's per-token interval (3 s).
+    const SENTENCE_END = /[.!?…]["'”’)\]]*$/;
+    const MIN_DRAFT_CHARS = 10;
+    const PACE_MS = 3500;
+
+    // ---- draft comparison: trivial edits (case, spacing, trailing punctuation, a few more characters)
+    // don't warrant a new round, and a reply to such a draft still applies.
+    const norm = (t) => (t || '').toLowerCase().replace(/\s+/g, ' ').replace(/[\s.,!?…;:'"”’)\]]+$/, '').trim();
+    function similar(a, b) {
+      const x = norm(a), y = norm(b);
+      if (!x || !y) return x === y;
+      const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+      return long.startsWith(short) && long.length - short.length <= 6;
     }
 
 	function cdxToSvg(icon, color, className) {
@@ -1154,7 +1154,7 @@
 		return renderPlainGuidance(response);
 	}
   
-    function updateAssistantPanel(contextId, replyId, response, personaName) {
+    function updateAssistantPanel(contextId, replyId, response, personaName, draft) {
       const box = document.getElementById(`${contextId}_d`);
       const p = document.getElementById(`${contextId}_p`);
       const h = document.getElementById(`${contextId}_h`);
@@ -1169,10 +1169,15 @@
         }
       }
       if (box.style.display === 'none') box.style.display = '';
-  
-      parseAssistantResponse(response).then((response) => {
+
+      const empty = response == null || String(response).trim() === '';
+      // null means the server chose not to speak (or the round failed): keep the guidance already shown
+      // for (almost) this same draft, so a borderline draft doesn't flicker between it and the placeholder
+      const keep = empty && p.dataset.guidanceFor && similar(p.dataset.guidanceFor, draft);
+      if (!keep) parseAssistantResponse(response).then((response) => {
         p.textContent = '';
 		p.appendChild(response);
+        p.dataset.guidanceFor = empty ? '' : (draft || '');
       },
       (error) => {
         console.error(`Error while parsing assistant response: ${error.message}`);
@@ -1707,10 +1712,24 @@
   
       if (!data || !data.interaction_id) return;
   
-      widgetState.set(widgetEl, { interactionId: data.interaction_id, inputEl, context, utterances: dtUtterances });
+      widgetState.set(widgetEl, {
+        interactionId: data.interaction_id, inputEl, context, utterances: dtUtterances,
+        usesDraft: typeof data.uses_draft === 'boolean' ? data.uses_draft : undefined,
+      });
       handleIntervention(widgetEl, inputEl, data);
   
-      const sendContinue = throttle(async () => {
+      const ws = { timer: 0, busy: false, dirty: false, lastSent: '', lastAt: 0 };
+      const readDraft = () => (inputEl.innerText || inputEl.textContent || inputEl.value || '');
+      const scheduleRound = (ms) => { clearTimeout(ws.timer); ws.timer = setTimeout(fireRound, ms); };
+
+      function onDraftChange() {
+        const raw = readDraft();
+        const text = raw.trim();
+        if (!text) { clearTimeout(ws.timer); ws.lastSent = ''; return; }
+        scheduleRound(SENTENCE_END.test(text) || /\n\s*$/.test(raw) ? 400 : 900);
+      }
+
+      async function fireRound() {
         const st = widgetState.get(widgetEl);
         if (!st) return;
   
@@ -1724,58 +1743,75 @@
           return;
         }
   
-        const widgetId = widgetEl.id;
-        const headerId = ASSISTANT_YAML ? `context_${widgetId}_h` : `reply_${widgetId}_h`;
-        const h = document.getElementById(headerId);
-        if (h) {
-          // Update the SVG icon
-          const existingSvg = h.querySelector('svg:not(.convowizard-mute-btn svg)');
-          if (existingSvg) {
-            const temp = document.createElement('div');
-            temp.innerHTML = `
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" class="cc-panel__icon">
-                <path fill-rule="evenodd" d="M8 0a1 1 0 0 1 .5 1.87V3.5H12A2 2 0 0 1 14 5.5v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h3.5V1.87A1 1 0 0 1 8 0ZM5.75 6.75a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4.5 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM5.5 14h5v1.5h-5V14Z"/>
-              </svg>
-            `;
-            const newSvg = temp.querySelector('svg');
-            if (newSvg) {
-              existingSvg.replaceWith(newSvg);
+        if (st.usesDraft === false) return; // the yaml never reads the draft; /start already answered
+        const text = readDraft().trim();
+        if (text.length < MIN_DRAFT_CHARS || norm(text) === norm(ws.lastSent)) return;
+        if (ws.busy) { ws.dirty = true; return; } // one in flight; re-fire once it returns
+        const wait = ws.lastAt + PACE_MS - Date.now();
+        if (wait > 0) return scheduleRound(wait);
+        ws.busy = true;
+        ws.lastSent = text;
+        ws.lastAt = Date.now();
+        let headerSpan = null, headerBefore = '', shown = false;
+        try {
+          const widgetId = widgetEl.id;
+          const headerId = ASSISTANT_YAML ? `context_${widgetId}_h` : `reply_${widgetId}_h`;
+          const h = document.getElementById(headerId);
+          if (h) {
+            // Update the SVG icon
+            const existingSvg = h.querySelector('svg:not(.convowizard-mute-btn svg)');
+            if (existingSvg) {
+              const temp = document.createElement('div');
+              temp.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" class="cc-panel__icon">
+                  <path fill-rule="evenodd" d="M8 0a1 1 0 0 1 .5 1.87V3.5H12A2 2 0 0 1 14 5.5v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h3.5V1.87A1 1 0 0 1 8 0ZM5.75 6.75a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4.5 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM5.5 14h5v1.5h-5V14Z"/>
+                </svg>
+              `;
+              const newSvg = temp.querySelector('svg');
+              if (newSvg) {
+                existingSvg.replaceWith(newSvg);
+              }
+            }
+            // Update text span with processing indicator
+            const textSpan = h.querySelector('span.convowizard-header-text');
+            if (textSpan) {
+              headerSpan = textSpan;
+              headerBefore = textSpan.textContent;
+              textSpan.textContent = ASSISTANT_YAML
+                ? 'Guidance (processing…)'
+                : 'Suggested Reading (processing…)';
             }
           }
-          // Update text span with processing indicator
-          const textSpan = h.querySelector('span.convowizard-header-text');
-          if (textSpan) {
-            textSpan.textContent = ASSISTANT_YAML
-              ? 'Guidance (processing…)'
-              : 'Suggested Reading (processing…)';
+          const data2 = await postJson('continue', {
+            existing: utterancesToExisting(st),
+            new: text,
+            interaction_id: st.interactionId,
+            token: TOKEN,
+            username: USERNAME,
+            ...llmFields()
+          });
+
+          if (data2 && data2.error === 'Invalid Token') {
+            TOKEN = null;
+            await persistToken(STORAGE_KEY, null);
+            showTokenForm(widgetEl);
+            return;
           }
+          if (data2 && data2.limit === 'interval') { ws.lastSent = ''; ws.dirty = true; return; }
+          // the draft changed while this was in flight: drop the reply; the re-fire answers the current draft
+          if (!similar(readDraft().trim(), text)) { ws.dirty = true; return; }
+          handleIntervention(widgetEl, st.inputEl, { ...data2, _draft: text });
+          shown = true;
+        } finally {
+          if (!shown && headerSpan && /processing…/.test(headerSpan.textContent)) headerSpan.textContent = headerBefore;
+          ws.busy = false;
+          if (ws.dirty) { ws.dirty = false; scheduleRound(0); }
         }
-        // Recreate existing array from cached state for continue requests
-        const existingForContinue = utterancesToExisting(st);
-  
-        const data2 = await postJson('continue', {
-          existing: existingForContinue,
-          new: (st.inputEl.innerText || st.inputEl.textContent || st.inputEl.value || ''),
-          interaction_id: st.interactionId,
-          token: TOKEN,
-          username: USERNAME,
-          ...llmFields()
-        });
-  
-        // Handle invalid token on continue
-        if (data2 && data2.error === 'Invalid Token') {
-          TOKEN = null;
-          await persistToken(STORAGE_KEY, null);
-          showTokenForm(widgetEl);
-          return;
-        }
-  
-        handleIntervention(widgetEl, st.inputEl, data2);
-      }, 6000);
-  
-      inputEl.addEventListener('input', sendContinue);
-      inputEl.addEventListener('keyup', sendContinue);
-      inputEl.addEventListener('paste', sendContinue);
+      }
+
+      inputEl.addEventListener('input', onDraftChange);
+      inputEl.addEventListener('paste', onDraftChange);
+      inputEl.addEventListener('blur', () => scheduleRound(0));
   
       let postBtn = widgetEl.querySelector(".oo-ui-buttonElement-button[title*='Reply']");
       if (!postBtn) {
@@ -1816,6 +1852,13 @@
       if (data.error) {
         return;
       }
+
+      // the server says whether the active yaml reads the draft at all; if not, typing doesn't
+      // need new rounds (undefined from an older server or no-yaml mode: keep sending)
+      if (typeof data.uses_draft === 'boolean') {
+        const st = widgetState.get(widgetEl);
+        if (st) st.usesDraft = data.uses_draft;
+      }
   
       const interactionId = data.interaction_id;
       if (!interactionId) {
@@ -1853,7 +1896,7 @@
       if (which.startsWith('llm')) {
         if (which === 'llm_assistant' || data.llm_response != null) {
           console.log(`[${NAME}] LLM assistant mode - response:`, data.llm_response != null);
-          updateAssistantPanel(contextId, replyId, data.llm_response, data.llm_persona_name);
+          updateAssistantPanel(contextId, replyId, data.llm_response, data.llm_persona_name, data._draft);
         } else {
           console.log(`[${NAME}] LLM mode - summary:`, data.llm_summary != null);
           console.log(`[${NAME}] LLM mode - links:`, (data.llm_links || []).length);
