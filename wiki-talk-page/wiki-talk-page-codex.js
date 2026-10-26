@@ -80,6 +80,7 @@
     const SUMMARY_PLACEHOLDER = `${NAME} is reading this discussion and will summarize it here.`;
     const GUIDANCE_PLACEHOLDER = `As you write, ${NAME} will suggest Wikipedia pages here that are worth reading for this discussion.`;
     const ASSISTANT_PLACEHOLDER = `${NAME} will write guidance here from your yaml.`;
+    const ASSISTANT_NOTHING = 'Nothing further to add at this point in the conversation.';
     // Only links whose URL passes this prefix check are ever rendered. The server
     // builds URLs from its own whitelist; this is defense in depth.
     const ALLOWED_LINK_PREFIX = 'https://en.wikipedia.org/wiki/Wikipedia:';
@@ -1171,13 +1172,18 @@
       if (box.style.display === 'none') box.style.display = '';
 
       const empty = response == null || String(response).trim() === '';
-      // null means the server chose not to speak (or the round failed): keep the guidance already shown
-      // for (almost) this same draft, so a borderline draft doesn't flicker between it and the placeholder
-      const keep = empty && p.dataset.guidanceFor && similar(p.dataset.guidanceFor, draft);
-      if (!keep) parseAssistantResponse(response).then((response) => {
+      // null means the gate chose not to speak (or the round failed). Same rule as new Reddit: keep the
+      // guidance if the draft is within a few characters of the one it answered; otherwise say there's
+      // nothing further. The placeholder shows only until the first guidance arrives.
+      const guidanceFor = p.dataset.guidanceFor;
+      const keep = empty && guidanceFor !== undefined && similar(guidanceFor, draft);
+      if (!keep && empty && guidanceFor !== undefined) {
+        p.textContent = ASSISTANT_NOTHING;
+        p.dataset.guidanceFor = '';
+      } else if (!keep) parseAssistantResponse(response).then((response) => {
         p.textContent = '';
 		p.appendChild(response);
-        p.dataset.guidanceFor = empty ? '' : (draft || '');
+        if (!empty) p.dataset.guidanceFor = draft || '';
       },
       (error) => {
         console.error(`Error while parsing assistant response: ${error.message}`);
