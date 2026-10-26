@@ -485,11 +485,11 @@
   
       const title = document.createElement('div');
       title.className = 'cdx-card__text__title';
-      title.textContent = `${NAME}: assistant.yaml`;
+      title.textContent = `${NAME}: assistant YAML`;
   
       const desc = document.createElement('div');
       desc.className = 'cdx-card__text__description cc-panel__body';
-      desc.textContent = 'Paste an assistant.yaml (or drag and drop the file here) to change the LLM behavior for you. Leave empty and apply to go back to the discussion summary and suggested reading.';
+      desc.textContent = 'Paste an assistant YAML file (or drag and drop the file here) to change the LLM behavior for you.';
   
       const textarea = document.createElement('textarea');
       textarea.rows = 10;
@@ -1782,10 +1782,8 @@
             const textSpan = h.querySelector('span.convowizard-header-text');
             if (textSpan) {
               headerSpan = textSpan;
-              headerBefore = textSpan.textContent;
-              textSpan.textContent = ASSISTANT_YAML
-                ? 'Guidance (processing…)'
-                : 'Suggested Reading (processing…)';
+              headerBefore = textSpan.textContent.replace(/ \(processing…\)$/, '');
+              textSpan.textContent = `${headerBefore} (processing…)`; // keep the persona's name
             }
           }
           const data2 = await postJson('continue', {
